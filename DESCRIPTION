@@ -1,0 +1,33 @@
+Package: snpdiver
+Title: Explore SNP Effects on Multiple Phenotypes 
+Version: 0.0.0.9000
+Authors@R: 
+    person(given = "Alice",
+           family = "MacQueen",
+           role = c("aut", "cre"),
+           email = "alice.macqueen@gmail.com",
+           comment = c(ORCID = "0000-0002-4606-1832"))
+Description: What the package does (one paragraph).
+License: GPL (>= 3)
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.1
+Imports: 
+    ashr,
+    bigsnpr,
+    bigstatsr,
+    cowplot,
+    dplyr,
+    ggplot2,
+    mashr,
+    magrittr,
+    matrixStats,
+    purrr,
+    readr,
+    rlang (>= 0.1.2),
+    tibble,
+    tidyr,
+    tidyselect
+Suggests: 
+    roxygen2

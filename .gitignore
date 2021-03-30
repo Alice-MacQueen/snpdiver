@@ -37,3 +37,8 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+.Rproj.user
+docs
+
+# Test files manually produced when checking functions
+tests/
