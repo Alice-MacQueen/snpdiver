@@ -42,6 +42,7 @@
 #' @param U.hyp Other covariance matrices for mash. Specify these as a list. These
 #'     matrices must have dimensions that match the number of phenotypes where
 #'     univariate GWAS ran successfully.
+#' @param verbose Output some information on the iterations? Default is `TRUE`.
 #'
 #' @return A mash object made up of all phenotypes where univariate GWAS ran
 #'     successfully.
@@ -56,6 +57,7 @@
 #' @importFrom tidyr replace_na
 #' @importFrom matrixStats colMaxs rowMaxs
 #' @importFrom stats predict
+#' @importFrom bigassertr printf
 #'
 #' @export
 dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
@@ -64,7 +66,7 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
                           thr.m = c("sum", "max"), num.strong = 1000,
                           num.random = NA,
                           scale.phe = TRUE, roll.size = 50, U.ed = NA,
-                          U.hyp = NA){
+                          U.hyp = NA, verbose = TRUE){
   # 1. Stop if not functions. ----
   if (attr(snp, "class") != "bigSNP") {
     stop("snp needs to be a bigSNP object, produced by the bigsnpr package.")
@@ -80,6 +82,9 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
   } else {
     type <- rep(type, ncol(df) - 1)
   }
+  if (!dir.exists(outputdir)) {
+    dir.create(outputdir)
+  }
 
   ## 1a. Generate useful values ----
   G <- snp$genotypes
@@ -94,12 +99,13 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
   bonferroni <- -log10(0.05/length(snp$map$physical.pos))
   markers <- tibble(CHR = snp$map$chromosome, POS = snp$map$physical.pos,
                     marker.ID = snp$map$marker.ID) %>%
-    mutate(CHRN = as.numeric(as.factor(.data$CHR)))
+    mutate(CHRN = as.numeric(as.factor(.data$CHR)),
+           CHR = as.factor(.data$CHR))
 
   # 2. Pop Structure Correction  ----
   if (is.null(svd)) {
-    message(paste0("Covariance matrix (svd) was not supplied - this will be",
-                   " generated using snp_autoSVD()."))
+    printf2(verbose = verbose, "\nCovariance matrix (svd) was not supplied - ")
+    printf2(verbose = verbose, "\nthis will be generated using snp_autoSVD()")
     svd <- snp_autoSVD(G = G, infos.chr = markers$CHRN, infos.pos = markers$POS,
                        k = 10, thr.r2 = thr.r2, roll.size = roll.size)
     } else {
@@ -107,6 +113,7 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
       }
   pc_max <- ncol(svd$u)
   gwas_ok <- c()
+  first_gwas_ok <- FALSE
 
   for (i in 2:ncol(df)) {
     df1 <- df %>%
@@ -127,8 +134,10 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
     gwas_ok[i-1] <- check_gwas(df1 = df1, phename = phename, type = type[i-1],
                                nPhe = nPhe, minphe = min.phe, nLev = nLev)
 
+
     # Find best # PCs to correct for population structure for each phenotype.
     if(gwas_ok[i-1]){
+
       lambdagc_df <- div_lambda_GC(df = df1, type = type[i-1], snp = snp,
                                    svd = svd, npcs = c(0:pc_max))
       PC_df <- get_best_PC_df(lambdagc_df)
@@ -145,29 +154,22 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
                         nsnp = nSNP, npcs = PC_df$NumPCs, nphe = nPhe,
                         nlev = nLev, lambda_GC = PC_df$lambda_GC,
                         bonferroni = bonferroni)
-    # plot Manhattan and QQ if save.plots == TRUE
-    if(save.plots == TRUE){
+
+    # plot  QQ if save.plots == TRUE
+    if (save.plots == TRUE) {
       qqplot <- get_qqplot(ps = gwas$pvalue, lambdaGC = TRUE)
-      manhattan <- get_manhattan(log10p = gwas$log10p, snp = snp,
-                                 thresh = bonferroni)  # could round these too
-      plotname <- paste0(gwas_data$phe, "_", gwas_data$type, "_model_",
-                         gwas_data$nphe, "g_", gwas_data$nsnp, "_SNPs_",
-                         gwas_data$npcs, "_PCs.png")
-      save_plot(filename = file.path(outputdir, paste0("QQplot_", plotname)),
-                plot = qqplot, base_asp = 1, base_height = 4)
-      save_plot(filename = file.path(outputdir, paste0("Manhattan_", plotname)),
-                plot = manhattan, base_asp = 2.1, base_height = 3.5)
-    }
+      }
 
     # save gwas outputs together in a fbm
     gwas <- gwas %>%
       select(.data[["estim"]], .data[["std.err"]], .data[["log10p"]])
 
-    if(i == 2){     # save .bk and .rds file the first time through the loop.
+    if(!first_gwas_ok){     # save .bk and .rds file the first time through the loop.
       if (!grepl("_$", suffix) & suffix != ""){
         suffix <- paste0("_", suffix)
       }
-      fbm.name <- paste0(outputdir, "gwas_effects", suffix)
+      first_gwas_ok <- TRUE
+      fbm.name <- file.path(outputdir, paste0("gwas_effects", suffix))
 
       colnames_fbm <- c(paste0(phename, "_Effect"), paste0(phename, "_SE"),
                        paste0(phename, "_log10p"))
@@ -179,18 +181,43 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
       colnames_fbm <- c(colnames_fbm, paste0(phename, "_Effect"),
                         paste0(phename, "_SE"), paste0(phename, "_log10p"))
       gwas2$add_columns(ncol_add = 3)
-      gwas2[,c(i*3-5, i*3-4, i*3-3)] <- gwas
+      gwas2[, c(sum(gwas_ok)*3 - 2, sum(gwas_ok)*3 - 1,
+                sum(gwas_ok)*3)] <- gwas
       gwas2$save()
-      gwas_metadata <- add_row(gwas_metadata, phe = phename, type = type[i-1],
+      gwas_metadata <- add_row(gwas_metadata, phe = phename, type = type[i - 1],
                            nsnp = nSNP, npcs = PC_df$NumPCs, nphe = nPhe,
                            nlev = nLev, lambda_GC = PC_df$lambda_GC,
                            bonferroni = bonferroni)
     }
+    # plot Manhattan and QQ if save.plots == TRUE
+    if (save.plots == TRUE) {
+      # set aspect ratio based on number of SNPs in snp file
+      asp <- log10(snp$genotypes$ncol)/2
+      if(asp < 1.1){
+        asp <- 1.1
+      }
+
+      manhattan <- get_manhattan(X = gwas2, ind = sum(gwas_ok)*3, snp = snp,
+                                 thresh = bonferroni)
+      plotname <- paste0(gwas_data$phe, "_", gwas_data$type, "_model_",
+                         gwas_data$nphe, "g_", gwas_data$nsnp, "_SNPs_",
+                         gwas_data$npcs, "_PCs.png")
+      save_plot(filename = file.path(outputdir, paste0("QQplot_", plotname)),
+                plot = qqplot, base_asp = 1, base_height = 4)
+      save_plot(filename = file.path(outputdir, paste0("Manhattan_", plotname)),
+                plot = manhattan, base_asp = asp, base_height = 3.75)
+
+    }
   rm(gwas)
-  message(paste0("Finished phenotype ", i-1, ": ", names(df)[i]))
+  printf2(verbose = verbose, "\nFinished GWAS on phenotype %s. ",
+          names(df)[i])
+    } else {
+      printf2(verbose = verbose, "\nSkipping GWAS on phenotype %s. ",
+              names(df)[i])
     }
   }
 
+  printf2(verbose = verbose, "\nNow preparing gwas effects for use in mash.\n")
   # 4. mash input ----
       ## prioritize effects with max(log10p) or max(sum(log10p))
       ## make a random set of relatively unlinked SNPs
@@ -198,7 +225,7 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
   ind_se <- (1:sum(gwas_ok))*3 - 1
   ind_p <- (1:sum(gwas_ok))*3
 
-  if(thr.m == "sum"){
+  if (thr.m == "sum") {
   thr_log10p <- big_apply(gwas2,
                          a.FUN = function(X, ind) rowSums(X[, ind]),
                          ind = ind_p,
@@ -211,21 +238,21 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
   }
   gwas2$add_columns(ncol_add = 1)
   colnames_fbm <- c(colnames_fbm, paste0(thr.m, "_thr_log10p"))
-  gwas2[,(sum(gwas_ok)*3+1)] <- thr_log10p
+  gwas2[,(sum(gwas_ok)*3 + 1)] <- thr_log10p
   gwas2$save()
 
     ## replace NA or Nan values
   # Replace SE with 1's, estimates and p values with 0's.
   replace_na_1 <- function(X, ind) replace_na(X[, ind], 1)
   replace_na_0 <- function(X, ind) replace_na(X[, ind], 0)
-  gwas2[,ind_se] <- big_apply(gwas2, a.FUN = replace_na_1, ind = ind_se,
+  gwas2[, ind_se] <- big_apply(gwas2, a.FUN = replace_na_1, ind = ind_se,
                               a.combine = 'plus')
-  gwas2[,ind_estim] <- big_apply(gwas2, a.FUN = replace_na_0, ind = ind_estim,
+  gwas2[, ind_estim] <- big_apply(gwas2, a.FUN = replace_na_0, ind = ind_estim,
                                  a.combine = 'plus')
-  gwas2[,ind_p] <- big_apply(gwas2, a.FUN = replace_na_0, ind = ind_p,
+  gwas2[, ind_p] <- big_apply(gwas2, a.FUN = replace_na_0, ind = ind_p,
                                  a.combine = 'plus')
-  gwas2[,(sum(gwas_ok)*3+1)] <- big_apply(gwas2, a.FUN = replace_na_0,
-                                          ind = (sum(gwas_ok)*3+1),
+  gwas2[, (sum(gwas_ok)*3+1)] <- big_apply(gwas2, a.FUN = replace_na_0,
+                                          ind = (sum(gwas_ok)*3 + 1),
                                           a.combine = 'plus')
   gwas2$save()
 
@@ -301,31 +328,26 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
   # 5. mash ----
 
   data_r <- mashr::mash_set_data(Bhat_random, Shat_random)
-  message(paste0("Estimating the correlation structure in the null tests from ",
-                 "the random data.
-                 (not the strong data because it will not necessarily contain
-                 any null tests)."))
+  printf2(verbose = verbose, "\nEstimating correlation structure in the null tests from a random sample of clumped data.")
   Vhat <- mashr::estimate_null_correlation_simple(data = data_r)
 
-  message(paste0("Setting up the main data objects with this correlation ",
-                 "structure in place."))
   data_strong <- mashr::mash_set_data(Bhat_strong, Shat_strong, V = Vhat)
   data_random <- mashr::mash_set_data(Bhat_random, Shat_random, V = Vhat)
   data_full <- mashr::mash_set_data(Bhat_full, Shat_full, V = Vhat)
   U_c <- mashr::cov_canonical(data_random)
 
-  if (!is.na(U.ed[1])) {
-  message(paste0("Now estimating data-driven covariances using the strong",
-                 " tests.
-                 NB: This step may take some time to complete."))
-  if (length(ind_p) < 6) {
-    cov_npc <- ind_p - 1
-  } else {
-    cov_npc <- 5
-  }
-  U_pca = mashr::cov_pca(data_strong, npc = cov_npc)
-  U_ed = mashr::cov_ed(data_strong, U_pca)
-  saveRDS(U_ed, file = paste0(outputdir, "Mash_U_ed", suffix, ".rds"))
+  if (is.na(U.ed[1])) {
+    printf2(verbose = verbose, "\nNow estimating data-driven covariances using
+    the strong tests. NB: This step may take some time to complete.\n")
+    if (length(ind_p) < 6) {
+      cov_npc <- ind_p - 1
+    } else {
+      cov_npc <- 5
+    }
+    U_pca = mashr::cov_pca(data_strong, npc = cov_npc)
+    U_ed = mashr::cov_ed(data_strong, U_pca)
+    saveRDS(U_ed, file = file.path(outputdir, paste0("Mash_U_ed", suffix,
+                                                     ".rds")))
   } else if (typeof(U.ed) == "list") {
     U_ed <- U.ed
   } else if (typeof(U.ed) == "character") {
@@ -337,12 +359,15 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
 
   if (typeof(U.hyp) == "list") {
     m = mashr::mash(data_random, Ulist = c(U_ed, U_c, U.hyp), outputlevel = 1)
-  } else {
+    } else if (typeof(U.hyp) == "character") {
+    U_hyp <- readRDS(file = U.hyp)
+    m = mashr::mash(data_random, Ulist = c(U_ed, U_c, U_hyp), outputlevel = 1)
+    } else {
     m = mashr::mash(data_random, Ulist = c(U_ed, U_c), outputlevel = 1)
+    printf2(verbose = verbose, "\nNo user-specified covariance matrices were included in the mash fit.")
   }
-  message(paste0("Compute posterior matrices for all effects",
-                 " using the mash fit from the
-               random tests."))
+  printf2(verbose = verbose, "\nComputing posterior weights for all effects
+  using the mash fit from the random tests.")
   m2 = mashr::mash(data_full, g = ashr::get_fitted_g(m), fixg = TRUE)
 
   return(m2)
@@ -429,6 +454,9 @@ div_gwas <- function(df, snp, type, svd, npcs){
   return(gwaspc)
 }
 
+#' Verbose?
+#' @importFrom bigassertr printf
+printf2 <- function(verbose, ...) if (verbose) { printf(...) }
 
 #' Create a quantile-quantile plot with ggplot2.
 #'
@@ -544,17 +572,27 @@ round_xy <- function(x, y, cl = NA, cu = NA, roundby = 0.001){
   }
 }
 
-get_manhattan <- function(log10p, snp, thresh){
+get_manhattan <- function(X, ind, snp, thresh){
+  roundFBM <- function(X, ind, at) ceiling(X[, ind] / at) * at
+  observed <- big_apply(X, ind = ind, a.FUN = roundFBM, at = 0.01,
+                        a.combine = 'plus')
+
   plot_data <- tibble(CHR = snp$map$chromosome, POS = snp$map$physical.pos,
-                    marker.ID = snp$map$marker.ID, log10p = log10p) %>%
-    mutate(observed = round2(.data$log10p, at = 0.001)) %>%
+                    marker.ID = snp$map$marker.ID, observed = observed)
+
+  if (length(unique(snp$map$physical.pos)) >= 500000) {
+    plot_data <- plot_data %>%
+      mutate(POS = round2(.data$POS, at = 250000))
+  }
+  plot_data <- plot_data %>%
     group_by(.data$CHR, .data$POS, .data$observed) %>%
-    slice(1)
+    slice(1) %>%
+    mutate(CHR = as.factor(.data$CHR))
 
   nchr <- length(unique(plot_data$CHR))
 
   p1 <- plot_data %>%
-    ggplot(aes(x = .data$POS, y = .data$log10p)) +
+    ggplot(aes(x = .data$POS, y = .data$observed)) +
     geom_point(aes(color = .data$CHR, fill = .data$CHR)) +
     geom_hline(yintercept = thresh, color = "black", linetype = 2,
                size = 1) +
@@ -583,7 +621,7 @@ get_manhattan <- function(log10p, snp, thresh){
           strip.text = element_text(hjust = 0.5, size = 10 ,vjust = 0),
           strip.placement = 'outside', panel.spacing.x = unit(-0.1, 'cm')) +
     labs(x = "Chromosome", y = "-log10(p value)") +
-    scale_x_continuous(expand = c(0.2, 0.2))
+    scale_x_continuous(expand = c(0.15, 0.15))
   return(p1)
 }
 
@@ -737,10 +775,9 @@ get_lambdagc <- function(ps, tol = 1e-8){
 }
 
 
-#' Return best number of PCs in terms of lambda_GC for Panicum virgatum.
-#' Return best number of PCs in terms of lambda_GC for the CDBN.
+#' Return best number of PCs in terms of lambda_GC
 #'
-#' @description Given a dataframe created using pvdiv_lambda_GC, this function
+#' @description Given a dataframe created using div_lambda_GC, this function
 #'     returns the first lambda_GC less than 1.05, or the smallest lambda_GC,
 #'     for each column in the dataframe.
 #'
@@ -811,4 +848,36 @@ check_gwas <- function(df1, phename, type, nPhe, minphe, nLev){
     gwas_ok <- TRUE
   }
   return(gwas_ok)
+}
+
+
+## @title Basic sanity check for covariance matrices
+## @param X input matrix
+check_covmat_basics = function(x) {
+  label = substitute(x)
+  if (!is.matrix(x))
+    labelled_stop(label, "is not a matrix")
+  if (!is.numeric(x))
+    labelled_stop(label, "is not a numeric matrix")
+  if (any(is.na(x)))
+    labelled_stop(label, "cannot contain NA values")
+  if (any(is.infinite(x)))
+    labelled_stop(label, "cannot contain Inf values")
+  if (any(is.nan(x)))
+    labelled_stop(label, "cannot contain NaN values")
+  if (nrow(x) != ncol(x))
+    labelled_stop(label, "is not a square matrix")
+  if (!isSymmetric(x, check.attributes = FALSE))
+    labelled_stop(label, "is not a symmetric matrix")
+  return(TRUE)
+}
+
+## @title check matrix for positive definitness
+## @param X input matrix
+check_positive_definite = function(x) {
+  check_covmat_basics(x)
+  tryCatch(chol(x),
+           error = function(e) labelled_stop(substitute(x),
+                                             "must be positive definite"))
+  return(TRUE)
 }

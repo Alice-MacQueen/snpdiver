@@ -2,8 +2,7 @@
 % Please edit documentation in R/wrapper.R
 \name{get_best_PC_df}
 \alias{get_best_PC_df}
-\title{Return best number of PCs in terms of lambda_GC for Panicum virgatum.
-Return best number of PCs in terms of lambda_GC for the CDBN.}
+\title{Return best number of PCs in terms of lambda_GC}
 \usage{
 get_best_PC_df(df)
 }
@@ -16,7 +15,7 @@ A dataframe containing the best lambda_GC value and number of PCs
 for each phenotype in the data frame.
 }
 \description{
-Given a dataframe created using pvdiv_lambda_GC, this function
+Given a dataframe created using div_lambda_GC, this function
 returns the first lambda_GC less than 1.05, or the smallest lambda_GC,
 for each column in the dataframe.
 }

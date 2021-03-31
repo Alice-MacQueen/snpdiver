@@ -20,7 +20,8 @@ dive_phe2mash(
   scale.phe = TRUE,
   roll.size = 50,
   U.ed = NA,
-  U.hyp = NA
+  U.hyp = NA,
+  verbose = TRUE
 )
 }
 \arguments{
@@ -73,6 +74,8 @@ generating these once and reusing them for multiple mash runs can save time.}
 \item{U.hyp}{Other covariance matrices for mash. Specify these as a list. These
 matrices must have dimensions that match the number of phenotypes where
 univariate GWAS ran successfully.}
+
+\item{verbose}{Output some information on the iterations? Default is \code{TRUE}.}
 }
 \value{
 A mash object made up of all phenotypes where univariate GWAS ran

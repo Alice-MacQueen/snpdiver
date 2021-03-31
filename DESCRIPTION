@@ -15,10 +15,13 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.1
 Imports: 
     ashr,
+    bigassertr,
     bigsnpr,
     bigstatsr,
+    cluster,
     cowplot,
     dplyr,
+    GGally,
     ggplot2,
     mashr,
     magrittr,
@@ -26,6 +29,8 @@ Imports:
     purrr,
     readr,
     rlang (>= 0.1.2),
+    rlist,
+    stringr,
     tibble,
     tidyr,
     tidyselect
