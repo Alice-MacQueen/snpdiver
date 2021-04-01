@@ -2,10 +2,15 @@
 % Please edit documentation in R/wrapper.R
 \name{printf2}
 \alias{printf2}
-\title{Verbose?}
+\title{print message function if verbose}
 \usage{
 printf2(verbose, ...)
 }
+\arguments{
+\item{verbose}{Logical. If TRUE, print progress messages.}
+
+\item{...}{Other arguments to \code{printf()}}
+}
 \description{
-Verbose?
+print message function if verbose
 }

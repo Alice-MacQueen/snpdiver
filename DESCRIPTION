@@ -35,4 +35,5 @@ Imports:
     tidyr,
     tidyselect
 Suggests: 
+    dots,
     roxygen2

@@ -23,7 +23,9 @@ mash_plot_Ulist(
 \item{suffix}{Character. Optional. A unique suffix used to save the files,
 instead of the current date & time.}
 
-\item{limits}{should there be plot limits of -1 and 1? Default is true.}
+\item{limits}{Logical. Should there be plot limits of -1 and 1? Default is TRUE.}
+
+\item{labels}{Logical. Should each pairwise comparison proportion have a label? Default is TRUE.}
 }
 \value{
 A list of dataframes used to make the tile plots and the plots
