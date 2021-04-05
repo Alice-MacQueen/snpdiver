@@ -63,7 +63,7 @@
 dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
                           outputdir = ".",
                           min.phe = 200, save.plots = TRUE, thr.r2 = 0.2,
-                          thr.m = c("sum", "max"), num.strong = 1000,
+                          thr.m = c("max", "sum"), num.strong = 1000,
                           num.random = NA,
                           scale.phe = TRUE, roll.size = 50, U.ed = NA,
                           U.hyp = NA, verbose = TRUE){
@@ -122,7 +122,7 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
     df1 <- df1 %>%
       group_by(.data$sample.ID) %>%
       filter(!is.na(.data[[phename]])) %>%
-      summarise(phe = mean(.data[[phename]]), .groups = "drop_last")
+      summarise(phe = mean(.data[[phename]], na.rm = TRUE), .groups = "drop_last")
     df1 <- plants %>%
       enframe(name = NULL, value = "sample.ID") %>%
       mutate(sample.ID = as.character(.data$sample.ID)) %>%
@@ -225,19 +225,19 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
   ind_se <- (1:sum(gwas_ok))*3 - 1
   ind_p <- (1:sum(gwas_ok))*3
 
-  if (thr.m == "sum") {
+  if (thr.m[1] == "sum") {
   thr_log10p <- big_apply(gwas2,
                          a.FUN = function(X, ind) rowSums(X[, ind]),
                          ind = ind_p,
                          a.combine = 'plus')
-  } else if(thr.m == "max"){
+  } else if(thr.m[1] == "max"){
     log10pmax_f <- function(X, ind) rowMaxs(as.matrix(X[, ind]))
     thr_log10p <- big_apply(gwas2,
                            a.FUN = log10pmax_f,
                            ind = ind_p, a.combine = 'c')
   }
   gwas2$add_columns(ncol_add = 1)
-  colnames_fbm <- c(colnames_fbm, paste0(thr.m, "_thr_log10p"))
+  colnames_fbm <- c(colnames_fbm, paste0(thr.m[1], "_thr_log10p"))
   gwas2[,(sum(gwas_ok)*3 + 1)] <- thr_log10p
   gwas2$save()
 
@@ -330,7 +330,7 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
     printf2(verbose = verbose, "\nNow estimating data-driven covariances using
     the strong tests. NB: This step may take some time to complete.\n")
     if (length(ind_p) < 6) {
-      cov_npc <- ind_p - 1
+      cov_npc <- length(ind_p) - 1
     } else {
       cov_npc <- 5
     }
@@ -379,8 +379,8 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
         to <- gwas2$nrow
         row_subset <- from:to
       }
-      Bhat_subset <- as.matrix(gwas2[row_subset, ind_estim])
-      Shat_subset <- as.matrix(gwas2[row_subset, ind_se])
+      Bhat_subset <- as.matrix(gwas2[row_subset, ind_estim])   # columns with effect estimates
+      Shat_subset <- as.matrix(gwas2[row_subset, ind_se])      # columns with SE
       colnames(Bhat_subset) <- gwas_metadata$phe
       colnames(Shat_subset) <- gwas_metadata$phe
       data_subset <- mashr::mash_set_data(Bhat_subset, Shat_subset, V = Vhat)
@@ -880,8 +880,6 @@ get_best_PC_df <- function(df){
   return(bestPCdf)
 }
 
-
-div_mash <- function(){}
 
 
 check_gwas <- function(df1, phename, type, nPhe, minphe, nLev){
