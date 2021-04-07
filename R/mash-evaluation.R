@@ -539,7 +539,7 @@ reorder_cormat <- function(cormat){
 #' @importFrom tidyr separate
 #' @import ggplot2
 #' @importFrom purrr as_vector
-#' @importFrom stringr str_replace str_replace_all str_sub
+#' @importFrom stringr str_replace str_replace_all str_sub str_length
 #'
 #' @export
 mash_plot_marker_effect <- function(m, snp = snp, n = NA, i = NA, marker = TRUE,
@@ -576,7 +576,28 @@ mash_plot_marker_effect <- function(m, snp = snp, n = NA, i = NA, marker = TRUE,
                                 x = .data$Conditions), width = 0.3) +
     geom_hline(yintercept = 0, lty = 2) +
     labs(x = "Conditions", y = "Effect Size") +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    theme_classic() +
+    theme(axis.text.x = element_text(size = 10, angle = 45, vjust = 1, hjust = 1),
+          panel.background = element_rect(fill=NA),
+          legend.position = "none",
+          axis.title = element_text(size = 10),
+          axis.text.y = element_text(size = 10),
+          axis.line.x = element_line(size = 0.35, colour = 'grey50'),
+          axis.line.y = element_line(size = 0.35, colour = 'grey50'),
+          axis.ticks = element_line(size = 0.25, colour = 'grey50'),
+          legend.justification = c(1, 0.75),
+          legend.key.size = unit(0.35, 'cm'),
+          legend.title = element_blank(),
+          legend.text = element_text(size = 9),
+          legend.text.align = 0, legend.background = element_blank(),
+          plot.subtitle = element_text(size = 10, vjust = 0),
+          strip.background = element_blank(),
+          strip.text = element_text(hjust = 0.5, size = 10, vjust = 0),
+          strip.placement = 'outside', panel.spacing.x = unit(-0., 'cm'))
+  if(str_length(effectplot$Conditions[1]) > 10){
+    ggobject <- ggobject +
+      theme(plot.margin = unit(c(0.2, 0.2, 0.5, 1.5), 'cm'),)
+  }
   if(marker == TRUE){
     ggobject <- ggobject + ggtitle(label = marker_name)
   }
@@ -633,7 +654,25 @@ mash_plot_covar <- function(m, saveoutput = FALSE, suffix = ""){
                                    levels = (df$`Covariance Matrix`))
   ggobject <- ggplot(df) +
     geom_bar(aes(x = .data$Mass, y = .data$`Covariance Matrix`),
-             stat = "identity")
+             stat = "identity") +
+    theme_classic() +
+    theme(axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          panel.background = element_rect(fill=NA),
+          axis.title = element_text(size = 10),
+          axis.text = element_text(size = 10),
+          axis.line.x = element_line(size = 0.35, colour = 'grey50'),
+          axis.line.y = element_line(size = 0.35, colour = 'grey50'),
+          axis.ticks = element_line(size = 0.25, colour = 'grey50'),
+          legend.justification = c(1, 0.75),
+          legend.key.size = unit(0.35, 'cm'),
+          legend.title = element_blank(),
+          legend.text = element_text(size = 9),
+          legend.text.align = 0, legend.background = element_blank(),
+          plot.subtitle = element_text(size = 10, vjust = 0),
+          strip.background = element_blank(),
+          strip.text = element_text(hjust = 0.5, size = 10 ,vjust = 0),
+          strip.placement = 'outside', panel.spacing.x = unit(-0.1, 'cm'))
 
   if(saveoutput == TRUE){
     if(!(str_sub(suffix, end = 1) %in% c("", "_"))){
@@ -699,12 +738,16 @@ mash_plot_Ulist <- function(m, range = NA, saveoutput = FALSE, suffix = "",
     if(ncol(U1) == length(get_colnames(m))){
       colnames(U1) <- str_replace(get_colnames(m), "(Stand_)??Bhat_?", "") %>%
         str_replace("-mean$", "")
+      name_order <- str_replace(get_colnames(m), "(Stand_)??Bhat_?", "") %>%
+        str_replace("-mean$", "")
       U1 <- as_tibble(U1, .name_repair = "unique") %>%
         mutate(rowU = str_replace(get_colnames(m), "(Stand_)??Bhat_?", ""),
                rowU = str_replace(.data$rowU, "-mean$", "")) %>%
         pivot_longer(cols = -.data$rowU, names_to = "colU",
                      values_to = "covar") %>%
         filter(!is.na(.data$covar))
+      U1$rowU <- factor(U1$rowU, levels = name_order)
+      U1$colU <- factor(U1$colU, levels = name_order)
     } else {
       U1 <- as_tibble(U1, rownames = "rowU", .name_repair = "unique") %>%
         pivot_longer(cols = -.data$rowU, names_to = "colU",
@@ -736,8 +779,24 @@ mash_plot_Ulist <- function(m, range = NA, saveoutput = FALSE, suffix = "",
                                         "#5DC863FF", "#AADC32FF", "#FDE725FF"),
                              limits = c(lim_lower, lim_upper)) +
         #geom_text(aes(label = round(.data$covar, 1)), color = "darkgrey") +
-        theme(legend.position = "right",
-              axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+        theme_classic() +
+        theme(panel.background = element_rect(fill=NA),
+              legend.position = "right",
+              axis.title = element_text(size = 10),
+              axis.text.y = element_text(size = 10),
+              axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+              axis.line.x = element_line(size = 0.35, colour = 'grey50'),
+              axis.line.y = element_line(size = 0.35, colour = 'grey50'),
+              axis.ticks = element_line(size = 0.25, colour = 'grey50'),
+              legend.justification = c(1, 0.75),
+              legend.key.size = unit(0.35, 'cm'),
+              legend.title = element_blank(),
+              legend.text = element_text(size = 9),
+              legend.text.align = 0, legend.background = element_blank(),
+              plot.subtitle = element_text(size = 10, vjust = 0),
+              strip.background = element_blank(),
+              strip.text = element_text(hjust = 0.5, size = 10 ,vjust = 0),
+              strip.placement = 'outside', panel.spacing.x = unit(-0.1, 'cm')) +
         xlab("") + ylab("") + ggtitle(names(Ulist)[u])
     }
     if (labels == TRUE) {
@@ -833,13 +892,25 @@ mash_plot_manhattan_by_condition <- function(m, snp, cond = NA,
     facet_wrap(~ .data$CHR, nrow = 1, scales = "free_x", strip.position = "bottom") +
     scale_color_viridis_c(option = "B", end = 0.95) +
     scale_fill_viridis_c(option = "B", end = 0.95) +
-    theme(strip.text = element_text(size = 8),
-          axis.text.y = element_text(size = 8),
-          axis.text.x = element_blank(),
-          legend.text = element_text(size = 8),
+    theme_classic() +
+    theme(axis.text.x = element_blank(),
           axis.ticks.x = element_blank(),
           panel.background = element_rect(fill=NA),
-          legend.position = "right") +
+          legend.position = "right",
+          axis.title = element_text(size = 10),
+          axis.text = element_text(size = 10),
+          axis.line.x = element_line(size = 0.35, colour = 'grey50'),
+          axis.line.y = element_line(size = 0.35, colour = 'grey50'),
+          axis.ticks = element_line(size = 0.25, colour = 'grey50'),
+          legend.justification = c(1, 0.75),
+          legend.key.size = unit(0.35, 'cm'),
+          legend.title = element_blank(),
+          legend.text = element_text(size = 9),
+          legend.text.align = 0, legend.background = element_blank(),
+          plot.subtitle = element_text(size = 10, vjust = 0),
+          strip.background = element_blank(),
+          strip.text = element_text(hjust = 0.5, size = 10 ,vjust = 0),
+          strip.placement = 'outside', panel.spacing.x = unit(-0.05, 'cm')) +
     labs(x = "Chromosome", y = log10BF) +
     scale_x_continuous(expand = c(0.32, 0.32)) +
     scale_shape_manual(values = rep(c(21, 22, 23), 9), guide = FALSE)
@@ -949,14 +1020,50 @@ mash_plot_pairwise_sharing <- function(m = NULL, effectRDS = NULL,
                        label_size = label_size, hjust = hjust, vjust = vjust,
                        layout.exp = layout.exp, min_size = min_size,
                        max_size = max_size) +
-      scale_color_viridis_c(option = option)
+      scale_color_viridis_c(option = option) +
+      theme_classic() +
+      theme(axis.text.x = element_blank(),
+            axis.ticks.x = element_blank(),
+            panel.background = element_rect(fill=NA),
+            axis.title = element_text(size = 10),
+            axis.text = element_text(size = 10),
+            axis.line.x = element_line(size = 0.35, colour = 'grey50'),
+            axis.line.y = element_line(size = 0.35, colour = 'grey50'),
+            axis.ticks = element_line(size = 0.25, colour = 'grey50'),
+            legend.justification = c(1, 0.75),
+            legend.key.size = unit(0.35, 'cm'),
+            legend.title = element_blank(),
+            legend.text = element_text(size = 9),
+            legend.text.align = 0, legend.background = element_blank(),
+            plot.subtitle = element_text(size = 10, vjust = 0),
+            strip.background = element_blank(),
+            strip.text = element_text(hjust = 0.5, size = 10 ,vjust = 0),
+            strip.placement = 'outside', panel.spacing.x = unit(-0.1, 'cm'))
   } else {
     corrplot <- ggcorr(data = NULL, cor_matrix = shared_effects, geom = geom,
                        label = label, label_alpha = label_alpha,
                        label_size = label_size, hjust = hjust, vjust = vjust,
                        layout.exp = layout.exp, min_size = min_size,
                        max_size = max_size) +
-      scale_color_viridis_c(option = option)
+      scale_color_viridis_c(option = option) +
+      theme_classic() +
+      theme(axis.text.x = element_blank(),
+            axis.ticks.x = element_blank(),
+            panel.background = element_rect(fill=NA),
+            axis.title = element_text(size = 10),
+            axis.text = element_text(size = 10),
+            axis.line.x = element_line(size = 0.35, colour = 'grey50'),
+            axis.line.y = element_line(size = 0.35, colour = 'grey50'),
+            axis.ticks = element_line(size = 0.25, colour = 'grey50'),
+            legend.justification = c(1, 0.75),
+            legend.key.size = unit(0.35, 'cm'),
+            legend.title = element_blank(),
+            legend.text = element_text(size = 9),
+            legend.text.align = 0, legend.background = element_blank(),
+            plot.subtitle = element_text(size = 10, vjust = 0),
+            strip.background = element_blank(),
+            strip.text = element_text(hjust = 0.5, size = 10 ,vjust = 0),
+            strip.placement = 'outside', panel.spacing.x = unit(-0.1, 'cm'))
   }
 
   if(saveoutput == TRUE){
@@ -1019,7 +1126,26 @@ mash_plot_sig_by_condition <- function(m, conditions = NA, saveoutput = FALSE,
     geom_point() +
     geom_hline(yintercept = 0, lty = 2) +
     xlab(label = "Number of Conditions") +
-    ylab(label = "Number of Significant SNPs")
+    ylab(label = "Number of Significant SNPs")+
+    theme_classic() +
+    theme(axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          panel.background = element_rect(fill=NA),
+          legend.position = "none",
+          axis.title = element_text(size = 10),
+          axis.text = element_text(size = 10),
+          axis.line.x = element_line(size = 0.35, colour = 'grey50'),
+          axis.line.y = element_line(size = 0.35, colour = 'grey50'),
+          axis.ticks = element_line(size = 0.25, colour = 'grey50'),
+          legend.justification = c(1, 0.75),
+          legend.key.size = unit(0.35, 'cm'),
+          legend.title = element_blank(),
+          legend.text = element_text(size = 9),
+          legend.text.align = 0, legend.background = element_blank(),
+          plot.subtitle = element_text(size = 10, vjust = 0),
+          strip.background = element_blank(),
+          strip.text = element_text(hjust = 0.5, size = 10 ,vjust = 0),
+          strip.placement = 'outside', panel.spacing.x = unit(-0.1, 'cm'))
 
   if(saveoutput == TRUE){
     if(!(str_sub(suffix, end = 1) %in% c("", "_"))){
