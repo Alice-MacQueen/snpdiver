@@ -656,9 +656,7 @@ mash_plot_covar <- function(m, saveoutput = FALSE, suffix = ""){
     geom_bar(aes(x = .data$Mass, y = .data$`Covariance Matrix`),
              stat = "identity") +
     theme_classic() +
-    theme(axis.text.x = element_blank(),
-          axis.ticks.x = element_blank(),
-          panel.background = element_rect(fill=NA),
+    theme(panel.background = element_rect(fill=NA),
           axis.title = element_text(size = 10),
           axis.text = element_text(size = 10),
           axis.line.x = element_line(size = 0.35, colour = 'grey50'),
@@ -910,9 +908,9 @@ mash_plot_manhattan_by_condition <- function(m, snp, cond = NA,
           plot.subtitle = element_text(size = 10, vjust = 0),
           strip.background = element_blank(),
           strip.text = element_text(hjust = 0.5, size = 10 ,vjust = 0),
-          strip.placement = 'outside', panel.spacing.x = unit(-0.05, 'cm')) +
+          strip.placement = 'outside', panel.spacing.x = unit(-0.01, 'cm')) +
     labs(x = "Chromosome", y = log10BF) +
-    scale_x_continuous(expand = c(0.32, 0.32)) +
+    scale_x_continuous(expand = c(0.12, 0.12)) +
     scale_shape_manual(values = rep(c(21, 22, 23), 9), guide = FALSE)
 
   if(saveoutput == TRUE){
@@ -1128,9 +1126,7 @@ mash_plot_sig_by_condition <- function(m, conditions = NA, saveoutput = FALSE,
     xlab(label = "Number of Conditions") +
     ylab(label = "Number of Significant SNPs")+
     theme_classic() +
-    theme(axis.text.x = element_blank(),
-          axis.ticks.x = element_blank(),
-          panel.background = element_rect(fill=NA),
+    theme(panel.background = element_rect(fill=NA),
           legend.position = "none",
           axis.title = element_text(size = 10),
           axis.text = element_text(size = 10),
