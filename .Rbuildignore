@@ -4,3 +4,6 @@
 ^docs$
 ^pkgdown$
 ^LICENSE\.md$
+^tests/Mash Pros and Cons\.docx$
+^tests/Mash Pros and Cons\.odt$
+^tests/*
