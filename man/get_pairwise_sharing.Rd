@@ -4,7 +4,13 @@
 \alias{get_pairwise_sharing}
 \title{Compute the proportion of (significant) signals shared by magnitude in each pair of conditions, based on the poterior mean}
 \usage{
-get_pairwise_sharing(m, factor = 0.5, lfsr_thresh = 0.05, FUN = identity)
+get_pairwise_sharing(
+  m,
+  factor = 0.5,
+  lfsr_thresh = 0.05,
+  thr.r2 = NA,
+  FUN = identity
+)
 }
 \arguments{
 \item{m}{the mash fit}
@@ -15,10 +21,14 @@ considered to be shared.}
 \item{lfsr_thresh}{the lfsr threshold for including an effect in the
 assessment}
 
+\item{thr.r2}{Numeric. Value between 0 and 1. The r^2 value above which
+effects are considered to be linked; in this case, only the SNP with the
+more significant log10Bayes Factor value in mash is kept.}
+
 \item{FUN}{a function to be applied to the estimated effect sizes before
 assessing sharing. The most obvious choice beside the default
 'FUN=identity' would be 'FUN=abs' if you want to ignore the sign of the
-effects when assesing sharing.}
+effects when assessing sharing.}
 }
 \description{
 Compute the proportion of (significant) signals shared by magnitude in each pair of conditions, based on the poterior mean

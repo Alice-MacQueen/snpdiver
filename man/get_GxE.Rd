@@ -4,7 +4,7 @@
 \alias{get_GxE}
 \title{Get data frames of types of GxE from a mash object}
 \usage{
-get_GxE(m, factor = 0.4, thresh = 0.05)
+get_GxE(m, factor = 0.4, thr.m = 0.05, thr.r2 = NA)
 }
 \arguments{
 \item{m}{An object of type mash}
@@ -12,7 +12,12 @@ get_GxE(m, factor = 0.4, thresh = 0.05)
 \item{factor}{a number between 0 and 1. The factor within which effects are
 considered to be shared.}
 
-\item{thresh}{Numeric. The threshold for including an effect in the assessment}
+\item{thr.m}{Numeric. The threshold for including an effect in the
+assessment in mash. Default is 0.05.}
+
+\item{thr.r2}{Numeric. Value between 0 and 1. The r^2 value above which
+effects are considered to be linked; in this case, only the SNP with the
+more significant log10Bayes Factor value in mash is kept.}
 }
 \value{
 A list containing eight data frames. Those with names that start

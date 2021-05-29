@@ -234,7 +234,7 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
     log10pmax_f <- function(X, ind) rowMaxs(as.matrix(X[, ind]))
     thr_log10p <- big_apply(gwas2,
                            a.FUN = log10pmax_f,
-                           ind = ind_p, a.combine = 'c')
+                           ind = ind_p, a.combine = 'plus')
   }
   gwas2$add_columns(ncol_add = 1)
   colnames_fbm <- c(colnames_fbm, paste0(thr.m[1], "_thr_log10p"))

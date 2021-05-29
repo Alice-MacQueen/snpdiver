@@ -9,6 +9,7 @@ mash_plot_pairwise_sharing(
   effectRDS = NULL,
   corrmatrix = NULL,
   reorder = TRUE,
+  thr.r2 = NA,
   saveoutput = FALSE,
   filename = NA,
   suffix = "",
@@ -23,6 +24,10 @@ mash_plot_pairwise_sharing(
 \item{corrmatrix}{A correlation matrix}
 
 \item{reorder}{Logical. Should the columns be reordered by similarity?}
+
+\item{thr.r2}{Numeric. Value between 0 and 1. The r^2 value above which
+effects are considered to be linked; in this case, only the SNP with the
+more significant log10Bayes Factor value in mash is kept.}
 
 \item{saveoutput}{Logical. Should the output be saved to the path?}
 

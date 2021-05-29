@@ -187,10 +187,10 @@ dive_effects2mash <- function(effects, snp, metadata, suffix = "", outputdir = "
   }
 
   write_csv(tibble(colnames_fbm), file.path(outputdir,
-                                            paste0("gwas_effects", suffix,
+                                            paste0("gwas_effects_", suffix,
                                                    "_column_names.csv")))
   write_csv(gwas_metadata, file.path(outputdir,
-                                     paste0("gwas_effects", suffix,
+                                     paste0("gwas_effects_", suffix,
                                             "_associated_metadata.csv")))
   ## make mash input data.frames (6x or more)
 

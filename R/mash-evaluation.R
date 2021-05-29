@@ -275,10 +275,13 @@ get_n_significant_conditions = function(m, thresh = 0.05, conditions = NULL,
 #'     considered to be shared.
 #' @param lfsr_thresh the lfsr threshold for including an effect in the
 #'     assessment
+#' @param thr.r2 Numeric. Value between 0 and 1. The r^2 value above which
+#'     effects are considered to be linked; in this case, only the SNP with the
+#'     more significant log10Bayes Factor value in mash is kept.
 #' @param FUN a function to be applied to the estimated effect sizes before
 #'     assessing sharing. The most obvious choice beside the default
 #'     'FUN=identity' would be 'FUN=abs' if you want to ignore the sign of the
-#'     effects when assesing sharing.
+#'     effects when assessing sharing.
 #' @details For each pair of tissues, first identify the effects that are
 #'     significant (by lfsr<lfsr_thresh) in at least one of the two tissues.
 #'     Then compute what fraction of these have an estimated (posterior mean)
@@ -294,7 +297,7 @@ get_n_significant_conditions = function(m, thresh = 0.05, conditions = NULL,
 #'
 #' @export
 get_pairwise_sharing = function(m, factor = 0.5, lfsr_thresh = 0.05,
-                                FUN = identity){
+                                thr.r2 = NA, FUN = identity){
   R = get_ncond(m)
   #lfsr = get_lfsr(m)
   S = matrix(NA, nrow = R, ncol = R)
@@ -336,13 +339,38 @@ get_significant_results = function(m, thresh = 0.05, conditions = NULL,
   sig[ord]
 }
 
+#' @title Clump SNPs from a mash object based on -log10BF
+#'
+#' @param m A mash object (outputted by mash).
+#' @param snp A bigSNP object, produced by the bigsnpr package. Here,
+#'     the WAMI SNP information.
+#' @param thr.r2 Value between 0 and 1. Threshold of r2 measure of linkage
+#'     disequilibrium. Markers in higher LD than this will be subset using clumping.
+#'
+#' @importFrom bigsnpr snp_clumping
+#'
+#' @export
+get_top_results_clumped = function(m, snp, thr.r2) {
+  marker_df <- get_marker_df(m = m, snp = snp) %>%
+    mutate(log10BF = get_log10bf(m = m))
+  sig_clumps <- snp_clumping(snp$genotypes, infos.chr = marker_df$CHRN,
+                             thr.r2 = thr.r2,
+                             infos.pos = marker_df$POS, S = marker_df$log10BF)
+  sig_markers <- marker_df[sig_clumps,]
+  return(sig_markers)
+}
+
 #' @title Get data frames of types of GxE from a mash object
 #'
 #' @description Performs set operations to determine pairwise GxE for effects
 #'     from a mash object.
 #'
 #' @param m An object of type mash
-#' @param thresh Numeric. The threshold for including an effect in the assessment
+#' @param thr.m Numeric. The threshold for including an effect in the
+#'     assessment in mash. Default is 0.05.
+#' @param thr.r2 Numeric. Value between 0 and 1. The r^2 value above which
+#'     effects are considered to be linked; in this case, only the SNP with the
+#'     more significant log10Bayes Factor value in mash is kept.
 #' @param factor a number between 0 and 1. The factor within which effects are
 #'     considered to be shared.
 #'
@@ -370,7 +398,7 @@ get_significant_results = function(m, thresh = 0.05, conditions = NULL,
 #' @importFrom rlang .data
 #'
 #' @export
-get_GxE = function(m, factor = 0.4, thresh = 0.05){
+get_GxE = function(m, factor = 0.4, thr.m = 0.05, thr.r2 = NA){
   R = get_ncond(m)                          # Effects to consider
 
   S_all = matrix(NA, nrow = R, ncol = R, dimnames = list(get_colnames(m),
@@ -394,16 +422,16 @@ get_GxE = function(m, factor = 0.4, thresh = 0.05){
     for(j in 1:R){
 
       if(i == j){
-        S_all[i, j] = length(get_significant_results(m, thresh = thresh,
+        S_all[i, j] = length(get_significant_results(m, thresh = thr.m,
                                                      conditions = i))
         S_CN[i, j] = 0
         # Not conservative!!
-        S_2_no[i, j] = length(get_significant_results(m, thresh = thresh,
+        S_2_no[i, j] = length(get_significant_results(m, thresh = thr.m,
                                                       conditions = i))
         S_AP[i, j] = 0
         S_DS[i, j] = 0
 
-        sig_i = get_significant_results(m, thresh = thresh, conditions = i)
+        sig_i = get_significant_results(m, thresh = thr.m, conditions = i)
         all_i = get_significant_results(m, thresh = 1, conditions = i)
         ns_i = dplyr::setdiff(all_i, sig_i)   # effects that aren't sig in i
         NS_pair[i, j] = length(ns_i)
@@ -412,8 +440,8 @@ get_GxE = function(m, factor = 0.4, thresh = 0.05){
 
       } else {
 
-        sig_i = get_significant_results(m, thresh = thresh, conditions = i)
-        sig_j = get_significant_results(m, thresh = thresh, conditions = j)
+        sig_i = get_significant_results(m, thresh = thr.m, conditions = i)
+        sig_j = get_significant_results(m, thresh = thr.m, conditions = j)
 
         all_i = get_significant_results(m, thresh = 1, conditions = i)
         all_j = get_significant_results(m, thresh = 1, conditions = j)
@@ -939,6 +967,9 @@ mash_plot_manhattan_by_condition <- function(m, snp, cond = NA,
 #' @param effectRDS An RDS containing a correlation matrix.
 #' @param corrmatrix A correlation matrix
 #' @param reorder Logical. Should the columns be reordered by similarity?
+#' @param thr.r2 Numeric. Value between 0 and 1. The r^2 value above which
+#'     effects are considered to be linked; in this case, only the SNP with the
+#'     more significant log10Bayes Factor value in mash is kept.
 #' @param saveoutput Logical. Should the output be saved to the path?
 #' @param suffix Character. Optional. A unique suffix used to save the files,
 #'     instead of the current date & time.
@@ -956,6 +987,7 @@ mash_plot_manhattan_by_condition <- function(m, snp, cond = NA,
 #' @export
 mash_plot_pairwise_sharing <- function(m = NULL, effectRDS = NULL,
                                        corrmatrix = NULL, reorder = TRUE,
+                                       thr.r2 = NA,
                                        saveoutput = FALSE, filename = NA,
                                        suffix = "", ...){
   # Additional arguments for get_pairwise_sharing, ggcorr, and save_plot
