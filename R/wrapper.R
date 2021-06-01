@@ -245,12 +245,14 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
   # Replace SE with 1's, estimates and p values with 0's.
   replace_na_1 <- function(X, ind) replace_na(X[, ind], 1)
   replace_na_0 <- function(X, ind) replace_na(X[, ind], 0)
-  gwas2[, ind_se] <- big_apply(gwas2, a.FUN = replace_na_1, ind = ind_se,
+  for (j in seq_along(ind_p)) {  # standardize one gwas at a time.
+  gwas2[, ind_se[j]] <- big_apply(gwas2, a.FUN = replace_na_1, ind = ind_se[j],
                               a.combine = 'plus')
-  gwas2[, ind_estim] <- big_apply(gwas2, a.FUN = replace_na_0, ind = ind_estim,
+  gwas2[, ind_estim[j]] <- big_apply(gwas2, a.FUN = replace_na_0,
+                                     ind = ind_estim[j], a.combine = 'plus')
+  gwas2[, ind_p[j]] <- big_apply(gwas2, a.FUN = replace_na_0, ind = ind_p[j],
                                  a.combine = 'plus')
-  gwas2[, ind_p] <- big_apply(gwas2, a.FUN = replace_na_0, ind = ind_p,
-                                 a.combine = 'plus')
+  }
   gwas2[, (sum(gwas_ok)*3+1)] <- big_apply(gwas2, a.FUN = replace_na_0,
                                           ind = (sum(gwas_ok)*3 + 1),
                                           a.combine = 'plus')
@@ -428,6 +430,11 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
     data_full <- mashr::mash_set_data(Bhat_full, Shat_full, V = Vhat)
     m2 = mashr::mash(data_full, g = ashr::get_fitted_g(m), fixg = TRUE)
   }
+
+  saveRDS(m2, file = file.path(outputdir, paste0("Full_mash_model_",
+                                                 num.strong, "_SNPs_U_ed_and_",
+                                                 num.random, "_SNPs_mash_fit",
+                                                 suffix, ".rds")))
 
   return(m2)
 }
