@@ -1,0 +1,70 @@
+---
+title: "snpdiver"
+author: "Alice MacQueen"
+date: "9/1/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+1. In R, run:
+
+```{r}
+install.packages("bigsnpr")
+
+install_github("alice-macqueen/snpdiver")
+
+library(bigsnpr)
+
+library(snpdiver)
+```
+
+# To see more information on snpdiver::dive_phe2mash, run ?dive_phe2mash in RStudio.
+
+2. Get your data ready to use.
+
+phenotype data: Needs to be a data frame where the first column is your individuals with SNP data, with the column name "sample.ID". All remaining columns should be the different conditions you want to include in mash.
+
+snp data: Needs to be a "bigSNP" object loaded into RStudio with the `snp_attach()` function from bigsnpr. To get this object from your vcf/plink file/whatever, you might want to use commands from this tutorial: https://alice-macqueen.github.io/switchgrassGWAS/articles/inputs.html
+
+If you can't get that to work, let me know.
+
+3. Run dive_phe2mash.
+
+Here's an example:
+
+```{r}
+
+library(tidyverse)
+library(bigsnpr)
+wami_snp <- snp_attach("~/Github/WAMIGXE/data/WAMI_26K_SNP.rds")
+wami_phe <- read_rds("~/Github/WAMIGXE/data/BLUPs_using_kinship_rrBLUP.rds")
+wami_yield <- wami_phe %>%
+  select(PLANT_ID, starts_with("Yield_")) %>%      # select just the phenotypes to use in mash
+  rename(sample.ID = PLANT_ID)                           # rename first column to be 'sample.ID'
+
+## Run function
+m <- dive_phe2mash(df = wami_yield, snp = wami_snp, type = "linear", 
+                   suffix = "WAMI_Yield", outputdir = "~/Github/snpdiver/tests/WAMI",
+                   thr.m = "max")
+
+## This should return "m", which is a mash output object. Some ways you can look at this object are below.
+```
+
+4. View mash results output by dive_phe2mash() function:
+
+```{r}
+
+## View mash results (also see the word document I sent earlier with examples of these plots)
+get_significant_results(m)                                             # Returns a vector of all the significant results/markers
+mash_plot_marker_effect(m, snp = wami_snp, n = 1)      # Plot the effects for the most significant marker
+mash_plot_manhattan_by_condition(m, snp = wami_snp)         # Plot the significance of all the markers
+mash_plot_covar(m)                                                          # Plot the loadings of markers onto the covariance matrices used in the mash run
+mash_plot_pairwise_sharing(m)                                       # Plot fraction of alleles with shared effects between sets of conditions
+mash_plot_Ulist(m)                                                            # Visualize the specific covariance matrices used in the mash run
+```
+
+
