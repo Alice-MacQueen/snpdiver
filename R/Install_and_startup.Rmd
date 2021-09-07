@@ -10,9 +10,9 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
-1. In R, run:
+# 1. In R, run:
 
-```{r}
+```
 install.packages("bigsnpr")
 
 install_github("alice-macqueen/snpdiver")
@@ -22,9 +22,9 @@ library(bigsnpr)
 library(snpdiver)
 ```
 
-# To see more information on snpdiver::dive_phe2mash, run ?dive_phe2mash in RStudio.
+    * To see more information on snpdiver::dive_phe2mash, run ?dive_phe2mash in RStudio.
 
-2. Get your data ready to use.
+# 2. Get your data ready to use.
 
 phenotype data: Needs to be a data frame where the first column is your individuals with SNP data, with the column name "sample.ID". All remaining columns should be the different conditions you want to include in mash.
 
@@ -32,11 +32,11 @@ snp data: Needs to be a "bigSNP" object loaded into RStudio with the `snp_attach
 
 If you can't get that to work, let me know.
 
-3. Run dive_phe2mash.
+# 3. Run dive_phe2mash.
 
 Here's an example:
 
-```{r}
+```
 
 library(tidyverse)
 library(bigsnpr)
@@ -54,9 +54,9 @@ m <- dive_phe2mash(df = wami_yield, snp = wami_snp, type = "linear",
 ## This should return "m", which is a mash output object. Some ways you can look at this object are below.
 ```
 
-4. View mash results output by dive_phe2mash() function:
+# 4. View mash results output by dive_phe2mash() function:
 
-```{r}
+```
 
 ## View mash results (also see the word document I sent earlier with examples of these plots)
 get_significant_results(m)                                             # Returns a vector of all the significant results/markers

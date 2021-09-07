@@ -22,6 +22,8 @@
 #' @param min.phe Integer. Minimum number of individuals phenotyped in order to
 #'     include that phenotype in GWAS. Default is 200. Use lower values with
 #'     caution.
+#' @param ncores Optional integer to specify the number of cores to be used
+#'     for parallelization. You can specify this with bigparallelr::nb_cores().
 #' @param save.plots Logical. Should Manhattan and QQ-plots be generated and
 #'     saved to the working directory for univariate GWAS? Default is TRUE.
 #' @param thr.r2 Value between 0 and 1. Threshold of r2 measure of linkage
@@ -43,11 +45,13 @@
 #' @importFrom matrixStats colMaxs rowMaxs
 #' @importFrom stats predict
 #' @importFrom bigassertr printf
+#' @importFrom bigparallelr nb_cores
 #'
 #' @export
 dive_phe2effects <- function(df, snp, type = "linear", svd = NULL, suffix = "",
                           outputdir = ".",
-                          min.phe = 200, save.plots = TRUE, thr.r2 = 0.2,
+                          min.phe = 200, ncores = NA,
+                          save.plots = TRUE, thr.r2 = 0.2,
                           roll.size = 50, verbose = TRUE){
   # 1. Stop if not functions. ----
   if (attr(snp, "class") != "bigSNP") {
@@ -66,6 +70,9 @@ dive_phe2effects <- function(df, snp, type = "linear", svd = NULL, suffix = "",
   }
   if (!dir.exists(outputdir)) {
     dir.create(outputdir)
+  }
+  if(is.na(ncores)){
+    ncores <- nb_cores()
   }
 
   ## 1a. Generate useful values ----
@@ -89,7 +96,8 @@ dive_phe2effects <- function(df, snp, type = "linear", svd = NULL, suffix = "",
     printf2(verbose = verbose, "\nCovariance matrix (svd) was not supplied - ")
     printf2(verbose = verbose, "\nthis will be generated using snp_autoSVD()")
     svd <- snp_autoSVD(G = G, infos.chr = markers$CHRN, infos.pos = markers$POS,
-                       k = 10, thr.r2 = thr.r2, roll.size = roll.size)
+                       k = 10, thr.r2 = thr.r2, roll.size = roll.size,
+                       ncores = ncores)
   } else {
     stopifnot(attr(svd, "class") == "big_SVD")
   }
@@ -104,7 +112,8 @@ dive_phe2effects <- function(df, snp, type = "linear", svd = NULL, suffix = "",
     df1 <- df1 %>%
       group_by(.data$sample.ID) %>%
       filter(!is.na(.data[[phename]])) %>%
-      summarise(phe = mean(.data[[phename]], na.rm = TRUE), .groups = "drop_last")
+      summarise(phe = mean(.data[[phename]], na.rm = TRUE),
+                .groups = "drop_last")
     df1 <- plants %>%
       enframe(name = NULL, value = "sample.ID") %>%
       mutate(sample.ID = as.character(.data$sample.ID)) %>%
@@ -121,7 +130,8 @@ dive_phe2effects <- function(df, snp, type = "linear", svd = NULL, suffix = "",
     if(gwas_ok[i-1]){
 
       lambdagc_df <- div_lambda_GC(df = df1, type = type[i-1], snp = snp,
-                                   svd = svd, npcs = c(0:pc_max))
+                                   svd = svd, npcs = c(0:pc_max),
+                                   ncores = ncores)
       PC_df <- get_best_PC_df(lambdagc_df)
       PC_df <- PC_df[1,]
 
@@ -129,7 +139,7 @@ dive_phe2effects <- function(df, snp, type = "linear", svd = NULL, suffix = "",
 
       # run gwas using best npcs from step 2 (best pop structure correction)
       gwas <- div_gwas(df = df1, snp = snp, type = type[i - 1], svd = svd,
-                       npcs = PC_df$NumPCs)
+                       npcs = PC_df$NumPCs, ncores = ncores)
       gwas <- gwas %>% mutate(pvalue = predict(gwas, log10 = FALSE),
                               log10p = -log10(.data$pvalue))
       gwas_data <- tibble(phe = phename, type = type[i - 1],
@@ -180,7 +190,7 @@ dive_phe2effects <- function(df, snp, type = "linear", svd = NULL, suffix = "",
         }
 
         manhattan <- get_manhattan(X = gwas2, ind = sum(gwas_ok)*3, snp = snp,
-                                   thresh = bonferroni)
+                                   thresh = bonferroni, ncores = ncores)
         plotname <- paste0(gwas_data$phe, "_", gwas_data$type, "_model_",
                            gwas_data$nphe, "g_", gwas_data$nsnp, "_SNPs_",
                            gwas_data$npcs, "_PCs.png")
@@ -212,11 +222,11 @@ dive_phe2effects <- function(df, snp, type = "linear", svd = NULL, suffix = "",
   replace_na_1 <- function(X, ind) replace_na(X[, ind], 1)
   replace_na_0 <- function(X, ind) replace_na(X[, ind], 0)
   gwas2[, ind_se] <- big_apply(gwas2, a.FUN = replace_na_1, ind = ind_se,
-                               a.combine = 'plus')
+                               a.combine = 'plus', ncores = ncores)
   gwas2[, ind_estim] <- big_apply(gwas2, a.FUN = replace_na_0, ind = ind_estim,
-                                  a.combine = 'plus')
+                                  a.combine = 'plus', ncores = ncores)
   gwas2[, ind_p] <- big_apply(gwas2, a.FUN = replace_na_0, ind = ind_p,
-                              a.combine = 'plus')
+                              a.combine = 'plus', ncores = ncores)
   gwas2$save()
 
   ## No scaling in this function.
@@ -229,5 +239,6 @@ dive_phe2effects <- function(df, snp, type = "linear", svd = NULL, suffix = "",
   write_csv(gwas_metadata, file.path(outputdir,
                                      paste0("gwas_effects", suffix,
                                             "_associated_metadata.csv")))
-  return(list(effects = gwas2, effect_cols = colnames_fbm, metadata = gwas_metadata))
+  return(list(effects = gwas2, effect_cols = colnames_fbm,
+              metadata = gwas_metadata))
 }

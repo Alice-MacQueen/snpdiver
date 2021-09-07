@@ -4,7 +4,7 @@
 \alias{div_gwas}
 \title{Wrapper for bigsnpr for GWAS}
 \usage{
-div_gwas(df, snp, type, svd, npcs)
+div_gwas(df, snp, type, svd, npcs, ncores)
 }
 \arguments{
 \item{df}{Dataframe of phenotypes where the first column is sample.ID}
@@ -18,6 +18,8 @@ Options are "linear" or "logistic".}
 can generate these using \code{bigsnpr::snp_autoSVD()}.}
 
 \item{npcs}{Integer. Number of PCs to use for population structure correction.}
+
+\item{ncores}{Integer. Number of cores to use for parallelization.}
 }
 \value{
 The gwas results for the last phenotype in the dataframe. That

@@ -12,6 +12,7 @@ dive_phe2effects(
   suffix = "",
   outputdir = ".",
   min.phe = 200,
+  ncores = NA,
   save.plots = TRUE,
   thr.r2 = 0.2,
   roll.size = 50,
@@ -39,6 +40,9 @@ string/name.}
 \item{min.phe}{Integer. Minimum number of individuals phenotyped in order to
 include that phenotype in GWAS. Default is 200. Use lower values with
 caution.}
+
+\item{ncores}{Optional integer to specify the number of cores to be used
+for parallelization. You can specify this with bigparallelr::nb_cores().}
 
 \item{save.plots}{Logical. Should Manhattan and QQ-plots be generated and
 saved to the working directory for univariate GWAS? Default is TRUE.}
