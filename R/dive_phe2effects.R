@@ -180,6 +180,9 @@ dive_phe2effects <- function(df, snp, type = "linear", svd = NULL, suffix = "",
                                  nsnp = nSNP, npcs = PC_df$NumPCs, nphe = nPhe,
                                  nlev = nLev, lambda_GC = PC_df$lambda_GC,
                                  bonferroni = bonferroni)
+        write_csv(gwas_metadata, file.path(outputdir,
+                                           paste0("gwas_effects", suffix,
+                                                  "_associated_metadata.csv")))
       }
       # plot Manhattan and QQ if save.plots == TRUE
       if (save.plots == TRUE) {
@@ -221,12 +224,16 @@ dive_phe2effects <- function(df, snp, type = "linear", svd = NULL, suffix = "",
   # Replace SE with 1's, estimates and p values with 0's.
   replace_na_1 <- function(X, ind) replace_na(X[, ind], 1)
   replace_na_0 <- function(X, ind) replace_na(X[, ind], 0)
-  gwas2[, ind_se] <- big_apply(gwas2, a.FUN = replace_na_1, ind = ind_se,
-                               a.combine = 'plus', ncores = ncores)
-  gwas2[, ind_estim] <- big_apply(gwas2, a.FUN = replace_na_0, ind = ind_estim,
-                                  a.combine = 'plus', ncores = ncores)
-  gwas2[, ind_p] <- big_apply(gwas2, a.FUN = replace_na_0, ind = ind_p,
-                              a.combine = 'plus', ncores = ncores)
+  for (j in seq_along(ind_p)) {  # standardize one gwas at a time.
+    gwas2[, ind_se[j]] <- big_apply(gwas2, a.FUN = replace_na_1,
+                                    ind = ind_se[j], a.combine = 'plus',
+                                    ncores = ncores)
+    gwas2[, ind_estim[j]] <- big_apply(gwas2, a.FUN = replace_na_0,
+                                       ind = ind_estim[j], a.combine = 'plus',
+                                       ncores = ncores)
+    gwas2[, ind_p[j]] <- big_apply(gwas2, a.FUN = replace_na_0, ind = ind_p[j],
+                                   a.combine = 'plus', ncores = ncores)
+  }
   gwas2$save()
 
   ## No scaling in this function.
