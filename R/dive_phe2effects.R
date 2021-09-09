@@ -95,9 +95,9 @@ dive_phe2effects <- function(df, snp, type = "linear", svd = NULL, suffix = "",
   if (is.null(svd)) {
     printf2(verbose = verbose, "\nCovariance matrix (svd) was not supplied - ")
     printf2(verbose = verbose, "\nthis will be generated using snp_autoSVD()")
-    svd <- snp_autoSVD(G = G, infos.chr = markers$CHRN, infos.pos = markers$POS,
-                       k = 10, thr.r2 = thr.r2, roll.size = roll.size,
-                       ncores = ncores)
+    svd <- snp_autoSVD(G = snp$genotypes, infos.chr = markers$CHRN,
+                       infos.pos = markers$POS, k = 10, thr.r2 = thr.r2,
+                       roll.size = roll.size, ncores = ncores)
   } else {
     stopifnot(attr(svd, "class") == "big_SVD")
   }
@@ -201,6 +201,8 @@ dive_phe2effects <- function(df, snp, type = "linear", svd = NULL, suffix = "",
                   plot = qqplot, base_asp = 1, base_height = 4)
         save_plot(filename = file.path(outputdir, paste0("Manhattan_", plotname)),
                   plot = manhattan, base_asp = asp, base_height = 3.75)
+        rm(qqplot)
+        rm(manhattan)
 
       }
       rm(gwas)
