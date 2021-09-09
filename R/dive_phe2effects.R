@@ -76,7 +76,6 @@ dive_phe2effects <- function(df, snp, type = "linear", svd = NULL, suffix = "",
   }
 
   ## 1a. Generate useful values ----
-  G <- snp$genotypes
   nSNP_M <- round(snp$genotypes$ncol/1000000, digits = 1)
   nSNP <- paste0(nSNP_M, "_M")
   if (nSNP_M < 1) {
@@ -86,15 +85,15 @@ dive_phe2effects <- function(df, snp, type = "linear", svd = NULL, suffix = "",
   #   nInd <- snp$genotypes$nrow
   plants <- snp$fam$sample.ID
   bonferroni <- -log10(0.05/length(snp$map$physical.pos))
-  markers <- tibble(CHR = snp$map$chromosome, POS = snp$map$physical.pos,
-                    marker.ID = snp$map$marker.ID) %>%
-    mutate(CHRN = as.numeric(as.factor(.data$CHR)),
-           CHR = as.factor(.data$CHR))
 
   # 2. Pop Structure Correction  ----
   if (is.null(svd)) {
     printf2(verbose = verbose, "\nCovariance matrix (svd) was not supplied - ")
     printf2(verbose = verbose, "\nthis will be generated using snp_autoSVD()")
+    markers <- tibble(CHR = snp$map$chromosome, POS = snp$map$physical.pos,
+                      marker.ID = snp$map$marker.ID) %>%
+      mutate(CHRN = as.numeric(as.factor(.data$CHR)),
+             CHR = as.factor(.data$CHR))
     svd <- snp_autoSVD(G = snp$genotypes, infos.chr = markers$CHRN,
                        infos.pos = markers$POS, k = 10, thr.r2 = thr.r2,
                        roll.size = roll.size, ncores = ncores)
@@ -176,10 +175,14 @@ dive_phe2effects <- function(df, snp, type = "linear", svd = NULL, suffix = "",
         gwas2[, c(sum(gwas_ok)*3 - 2, sum(gwas_ok)*3 - 1,
                   sum(gwas_ok)*3)] <- gwas
         gwas2$save()
+        rm(gwas)
         gwas_metadata <- add_row(gwas_metadata, phe = phename, type = type[i - 1],
                                  nsnp = nSNP, npcs = PC_df$NumPCs, nphe = nPhe,
                                  nlev = nLev, lambda_GC = PC_df$lambda_GC,
                                  bonferroni = bonferroni)
+        write_csv(tibble(colnames_fbm), file.path(outputdir,
+                                                  paste0("gwas_effects", suffix,
+                                                         "_column_names.csv")))
         write_csv(gwas_metadata, file.path(outputdir,
                                            paste0("gwas_effects", suffix,
                                                   "_associated_metadata.csv")))
@@ -205,7 +208,6 @@ dive_phe2effects <- function(df, snp, type = "linear", svd = NULL, suffix = "",
         rm(manhattan)
 
       }
-      rm(gwas)
       printf2(verbose = verbose, "\nFinished GWAS on phenotype %s. ",
               names(df)[i])
     } else {

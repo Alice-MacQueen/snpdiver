@@ -191,6 +191,7 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
       gwas2[, c(sum(gwas_ok)*3 - 2, sum(gwas_ok)*3 - 1,
                 sum(gwas_ok)*3)] <- gwas
       gwas2$save()
+      rm(gwas)
       gwas_metadata <- add_row(gwas_metadata, phe = phename, type = type[i - 1],
                            nsnp = nSNP, npcs = PC_df$NumPCs, nphe = nPhe,
                            nlev = nLev, lambda_GC = PC_df$lambda_GC,
@@ -211,13 +212,12 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
                          gwas_data$npcs, "_PCs.png")
       save_plot(filename = file.path(outputdir, paste0("QQplot_", plotname)),
                 plot = qqplot, base_asp = 1, base_height = 4)
+      rm(qqplot)
       save_plot(filename = file.path(outputdir, paste0("Manhattan_", plotname)),
                 plot = manhattan, base_asp = asp, base_height = 3.75)
       rm(manhattan)
-      rm(qqplot)
 
     }
-  rm(gwas)
   printf2(verbose = verbose, "\nFinished GWAS on phenotype %s. ",
           names(df)[i])
     } else {
@@ -496,7 +496,6 @@ div_gwas <- function(df, snp, type, svd, npcs, ncores){
   if(colnames(df)[1] != "sample.ID"){
     stop("First column of phenotype dataframe (df) must be 'sample.ID'.")
   }
-  G <- snp$genotypes
   pc_max = ncol(svd$u)
 
   for(i in seq_along(names(df))[-1]){
@@ -506,10 +505,11 @@ div_gwas <- function(df, snp, type, svd, npcs, ncores){
     if(type == "linear"){
       if(npcs > 0){
         ind_u <- matrix(svd$u[which(!is.na(df[,i])),1:npcs], ncol = npcs)
-        gwaspc <- big_univLinReg(G, y.train = y1, covar.train = ind_u,
-                                 ind.train = ind_y, ncores = ncores)
+        gwaspc <- big_univLinReg(snp$genotypes, y.train = y1,
+                                 covar.train = ind_u, ind.train = ind_y,
+                                 ncores = ncores)
       } else {
-        gwaspc <- big_univLinReg(G, y.train = y1, ind.train = ind_y,
+        gwaspc <- big_univLinReg(snp$genotypes, y.train = y1, ind.train = ind_y,
                                  ncores = ncores)
       }
     } else if(type == "logistic"){
@@ -519,12 +519,12 @@ div_gwas <- function(df, snp, type, svd, npcs, ncores){
                      "converge either, those SNP estimations are set to NA."))
       if(npcs > 0){
         ind_u <- matrix(svd$u[which(!is.na(df[,i])),1:npcs], ncol = npcs)
-        gwaspc <- suppressMessages(big_univLogReg(G, y01.train = y1,
+        gwaspc <- suppressMessages(big_univLogReg(snp$genotypes, y01.train = y1,
                                                   covar.train = ind_u,
                                                   ind.train = ind_y,
                                                   ncores = ncores))
       } else {
-        gwaspc <- suppressMessages(big_univLogReg(G, y01.train = y1,
+        gwaspc <- suppressMessages(big_univLogReg(snp$genotypes, y01.train = y1,
                                                   ind.train = ind_y,
                                                   ncores = ncores))
       }
