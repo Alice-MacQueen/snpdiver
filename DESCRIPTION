@@ -1,5 +1,5 @@
 Package: snpdiver
-Title: Explore SNP Effects on Multiple Phenotypes 
+Title: Explore SNP Effects on Multiple Phenotypes in Diversity Panels
 Version: 0.0.0.9000
 Authors@R: 
     person(given = "Alice",
@@ -24,6 +24,8 @@ Imports:
     dplyr,
     GGally,
     ggplot2,
+    here,
+    hexbin,
     mashr,
     magrittr,
     matrixStats,

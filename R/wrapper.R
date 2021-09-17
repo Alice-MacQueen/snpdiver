@@ -61,6 +61,7 @@
 #' @importFrom stats predict
 #' @importFrom bigassertr printf
 #' @importFrom bigparallelr nb_cores
+#' @importFrom rlang .data
 #'
 #' @export
 dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
@@ -164,7 +165,13 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
 
     # plot  QQ if save.plots == TRUE
     if (save.plots == TRUE) {
+      plotname <- paste0(gwas_data$phe, "_", gwas_data$type, "_model_",
+                         gwas_data$nphe, "g_", gwas_data$nsnp, "_SNPs_",
+                         gwas_data$npcs, "_PCs.png")
       qqplot <- get_qqplot(ps = gwas$pvalue, lambdaGC = TRUE)
+      save_plot(filename = file.path(outputdir, paste0("QQplot_", plotname)),
+                plot = qqplot, base_asp = 1, base_height = 4)
+      rm(qqplot)
       }
 
     # save gwas outputs together in a fbm
@@ -172,7 +179,7 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
       select(.data[["estim"]], .data[["std.err"]], .data[["log10p"]])
 
     if(!first_gwas_ok){     # save .bk and .rds file the first time through the loop.
-      if (!grepl("_$", suffix) & suffix != ""){
+      if (!grepl("^_", suffix) & suffix != ""){
         suffix <- paste0("_", suffix)
       }
       first_gwas_ok <- TRUE
@@ -207,12 +214,6 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
 
       manhattan <- get_manhattan(X = gwas2, ind = sum(gwas_ok)*3, snp = snp,
                                  thresh = bonferroni, ncores = ncores)
-      plotname <- paste0(gwas_data$phe, "_", gwas_data$type, "_model_",
-                         gwas_data$nphe, "g_", gwas_data$nsnp, "_SNPs_",
-                         gwas_data$npcs, "_PCs.png")
-      save_plot(filename = file.path(outputdir, paste0("QQplot_", plotname)),
-                plot = qqplot, base_asp = 1, base_height = 4)
-      rm(qqplot)
       save_plot(filename = file.path(outputdir, paste0("Manhattan_", plotname)),
                 plot = manhattan, base_asp = asp, base_height = 3.75)
       rm(manhattan)
