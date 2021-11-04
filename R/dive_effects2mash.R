@@ -16,6 +16,8 @@
 #'     Saved under the name "gwas_effects_{suffix}_associated_metadata.csv".
 #' @param suffix Optional character vector to give saved files a unique search string/name.
 #' @param outputdir Optional file path to save output files.
+#' @param ncores Optional integer to specify the number of cores to be used
+#'     for parallelization. You can specify this with bigparallelr::nb_cores().
 #' @param thr.r2 Value between 0 and 1. Threshold of r2 measure of linkage
 #'     disequilibrium. Markers in higher LD than this will be subset using clumping.
 #' @param thr.m "sum" or "max". Type of threshold to use to clump values for
@@ -50,14 +52,15 @@
 #' @importFrom matrixStats colMaxs rowMaxs
 #' @importFrom stats predict
 #' @importFrom bigassertr printf
+#' @importFrom bigparallelr nb_cores
 #'
 #' @export
-dive_effects2mash <- function(effects, snp, metadata, suffix = "", outputdir = ".",
-                          thr.r2 = 0.2,
-                          thr.m = c("max", "sum"), num.strong = 1000,
-                          num.random = NA,
-                          scale.phe = TRUE, U.ed = NA,
-                          U.hyp = NA, verbose = TRUE){
+dive_effects2mash <- function(effects, snp, metadata, suffix = "",
+                              outputdir = ".", ncores = NA,
+                              thr.r2 = 0.2, thr.m = c("max", "sum"),
+                              num.strong = 1000, num.random = NA,
+                              scale.phe = TRUE, U.ed = NA,
+                              U.hyp = NA, verbose = TRUE){
   # 1. Stop if not functions. ----
   if (attr(snp, "class") != "bigSNP") {
     stop("snp needs to be a bigSNP object, produced by the bigsnpr package.")
@@ -67,6 +70,9 @@ dive_effects2mash <- function(effects, snp, metadata, suffix = "", outputdir = "
   }
   if (!grepl("_$", suffix) & suffix != ""){
     suffix <- paste0("_", suffix)
+  }
+  if(is.na(ncores)){
+    ncores <- nb_cores()
   }
 
   ## 1a. Generate useful values ----
@@ -100,12 +106,12 @@ dive_effects2mash <- function(effects, snp, metadata, suffix = "", outputdir = "
       thr_log10p <- big_apply(effects,
                               a.FUN = function(X, ind) rowSums(X[, ind]),
                               ind = ind_p,
-                              a.combine = 'plus')
+                              a.combine = 'plus', ncores = ncores)
     } else if(thr.m[1] == "max"){
       log10pmax_f <- function(X, ind) rowMaxs(as.matrix(X[, ind]))
       thr_log10p <- big_apply(effects,
                               a.FUN = log10pmax_f,
-                              ind = ind_p, a.combine = 'c')
+                              ind = ind_p, a.combine = 'c', ncores = ncores)
     }
     effects$add_columns(ncol_add = 1)
     colnames_fbm <- c(colnames_fbm, paste0(thr.m[1], "_thr_log10p"))
@@ -116,12 +122,12 @@ dive_effects2mash <- function(effects, snp, metadata, suffix = "", outputdir = "
       thr_log10p <- big_apply(effects,
                               a.FUN = function(X, ind) rowSums(X[, ind]),
                               ind = ind_p,
-                              a.combine = 'plus')
+                              a.combine = 'plus', ncores = ncores)
     } else if(thr.m[1] == "max"){
       log10pmax_f <- function(X, ind) rowMaxs(as.matrix(X[, ind]))
       thr_log10p <- big_apply(effects,
                               a.FUN = log10pmax_f,
-                              ind = ind_p, a.combine = 'c')
+                              ind = ind_p, a.combine = 'c', ncores = ncores)
     }
     colnames_fbm <- c(colnames_fbm, paste0(thr.m[1], "_thr_log10p"))
     effects[,(sum(gwas_ok)*3 + 1)] <- thr_log10p
@@ -136,14 +142,16 @@ dive_effects2mash <- function(effects, snp, metadata, suffix = "", outputdir = "
   replace_na_1 <- function(X, ind) replace_na(X[, ind], 1)
   replace_na_0 <- function(X, ind) replace_na(X[, ind], 0)
   effects[, ind_se] <- big_apply(effects, a.FUN = replace_na_1, ind = ind_se,
-                               a.combine = 'plus')
-  effects[, ind_estim] <- big_apply(effects, a.FUN = replace_na_0, ind = ind_estim,
-                                  a.combine = 'plus')
+                               a.combine = 'plus', ncores = ncores)
+  effects[, ind_estim] <- big_apply(effects, a.FUN = replace_na_0,
+                                    ind = ind_estim, ncores = ncores,
+                                    a.combine = 'plus')
   effects[, ind_p] <- big_apply(effects, a.FUN = replace_na_0, ind = ind_p,
-                              a.combine = 'plus')
+                                a.combine = 'plus', ncores = ncores)
   effects[, (sum(gwas_ok)*3+1)] <- big_apply(effects, a.FUN = replace_na_0,
-                                           ind = (sum(gwas_ok)*3 + 1),
-                                           a.combine = 'plus')
+                                             ind = (sum(gwas_ok)*3 + 1),
+                                             a.combine = 'plus',
+                                             ncores = ncores)
   effects$save()
 
   strong_clumps <- snp_clumping(G, infos.chr = markers$CHRN, thr.r2 = thr.r2,
@@ -173,12 +181,13 @@ dive_effects2mash <- function(effects, snp, metadata, suffix = "", outputdir = "
   if (scale.phe == TRUE) {
     colmaxes <- function(X, ind) colMaxs(abs(as.matrix(X[, ind])))
     scale.effects <- big_apply(effects, a.FUN = colmaxes,
-                               ind = ind_estim, a.combine = 'c')
+                               ind = ind_estim, a.combine = 'c',
+                               ncores = ncores)
     colstand <- function(X, ind, v) X[,ind] / v
     for (j in seq_along(scale.effects)) {  # standardize one gwas at a time.
       effects[,c(ind_estim[j], ind_se[j])] <-
         big_apply(effects, a.FUN = colstand, ind = c(ind_estim[j], ind_se[j]),
-                  v = scale.effects[j], a.combine = 'plus')
+                  v = scale.effects[j], a.combine = 'plus', ncores = ncores)
     }
     effects$save()
     gwas_metadata <- metadata %>% mutate(scaled = TRUE)

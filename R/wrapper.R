@@ -21,6 +21,8 @@
 #' @param min.phe Integer. Minimum number of individuals phenotyped in order to
 #'     include that phenotype in GWAS. Default is 200. Use lower values with
 #'     caution.
+#' @param ncores Optional integer to specify the number of cores to be used
+#'     for parallelization. You can specify this with bigparallelr::nb_cores().
 #' @param save.plots Logical. Should Manhattan and QQ-plots be generated and
 #'     saved to the working directory for univariate GWAS? Default is TRUE.
 #' @param thr.r2 Value between 0 and 1. Threshold of r2 measure of linkage
@@ -58,11 +60,14 @@
 #' @importFrom matrixStats colMaxs rowMaxs
 #' @importFrom stats predict
 #' @importFrom bigassertr printf
+#' @importFrom bigparallelr nb_cores
+#' @importFrom rlang .data
 #'
 #' @export
 dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
                           outputdir = ".",
-                          min.phe = 200, save.plots = TRUE, thr.r2 = 0.2,
+                          min.phe = 200, ncores = NA,
+                          save.plots = TRUE, thr.r2 = 0.2,
                           thr.m = c("max", "sum"), num.strong = 1000,
                           num.random = NA,
                           scale.phe = TRUE, roll.size = 50, U.ed = NA,
@@ -85,9 +90,11 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
   if (!dir.exists(outputdir)) {
     dir.create(outputdir)
   }
+  if(is.na(ncores)){
+    ncores <- nb_cores()
+  }
 
   ## 1a. Generate useful values ----
-  G <- snp$genotypes
   nSNP_M <- round(snp$genotypes$ncol/1000000, digits = 1)
   nSNP <- paste0(nSNP_M, "_M")
   if (nSNP_M < 1) {
@@ -106,7 +113,7 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
   if (is.null(svd)) {
     printf2(verbose = verbose, "\nCovariance matrix (svd) was not supplied - ")
     printf2(verbose = verbose, "\nthis will be generated using snp_autoSVD()")
-    svd <- snp_autoSVD(G = G, infos.chr = markers$CHRN, infos.pos = markers$POS,
+    svd <- snp_autoSVD(G = snp$genotypes, infos.chr = markers$CHRN, infos.pos = markers$POS,
                        k = 10, thr.r2 = thr.r2, roll.size = roll.size)
     } else {
     stopifnot(attr(svd, "class") == "big_SVD")
@@ -139,7 +146,8 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
     if(gwas_ok[i-1]){
 
       lambdagc_df <- div_lambda_GC(df = df1, type = type[i-1], snp = snp,
-                                   svd = svd, npcs = c(0:pc_max))
+                                   svd = svd, npcs = c(0:pc_max),
+                                   ncores = ncores)
       PC_df <- get_best_PC_df(lambdagc_df)
       PC_df <- PC_df[1,]
 
@@ -147,7 +155,7 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
 
     # run gwas using best npcs from step 2 (best pop structure correction)
     gwas <- div_gwas(df = df1, snp = snp, type = type[i - 1], svd = svd,
-                     npcs = PC_df$NumPCs)
+                     ncores = ncores, npcs = PC_df$NumPCs)
     gwas <- gwas %>% mutate(pvalue = predict(gwas, log10 = FALSE),
                             log10p = -log10(.data$pvalue))
     gwas_data <- tibble(phe = phename, type = type[i - 1],
@@ -157,7 +165,13 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
 
     # plot  QQ if save.plots == TRUE
     if (save.plots == TRUE) {
+      plotname <- paste0(gwas_data$phe, "_", gwas_data$type, "_model_",
+                         gwas_data$nphe, "g_", gwas_data$nsnp, "_SNPs_",
+                         gwas_data$npcs, "_PCs.png")
       qqplot <- get_qqplot(ps = gwas$pvalue, lambdaGC = TRUE)
+      save_plot(filename = file.path(outputdir, paste0("QQplot_", plotname)),
+                plot = qqplot, base_asp = 1, base_height = 4)
+      rm(qqplot)
       }
 
     # save gwas outputs together in a fbm
@@ -165,7 +179,7 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
       select(.data[["estim"]], .data[["std.err"]], .data[["log10p"]])
 
     if(!first_gwas_ok){     # save .bk and .rds file the first time through the loop.
-      if (!grepl("_$", suffix) & suffix != ""){
+      if (!grepl("^_", suffix) & suffix != ""){
         suffix <- paste0("_", suffix)
       }
       first_gwas_ok <- TRUE
@@ -184,6 +198,7 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
       gwas2[, c(sum(gwas_ok)*3 - 2, sum(gwas_ok)*3 - 1,
                 sum(gwas_ok)*3)] <- gwas
       gwas2$save()
+      rm(gwas)
       gwas_metadata <- add_row(gwas_metadata, phe = phename, type = type[i - 1],
                            nsnp = nSNP, npcs = PC_df$NumPCs, nphe = nPhe,
                            nlev = nLev, lambda_GC = PC_df$lambda_GC,
@@ -198,17 +213,12 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
       }
 
       manhattan <- get_manhattan(X = gwas2, ind = sum(gwas_ok)*3, snp = snp,
-                                 thresh = bonferroni)
-      plotname <- paste0(gwas_data$phe, "_", gwas_data$type, "_model_",
-                         gwas_data$nphe, "g_", gwas_data$nsnp, "_SNPs_",
-                         gwas_data$npcs, "_PCs.png")
-      save_plot(filename = file.path(outputdir, paste0("QQplot_", plotname)),
-                plot = qqplot, base_asp = 1, base_height = 4)
+                                 thresh = bonferroni, ncores = ncores)
       save_plot(filename = file.path(outputdir, paste0("Manhattan_", plotname)),
                 plot = manhattan, base_asp = asp, base_height = 3.75)
+      rm(manhattan)
 
     }
-  rm(gwas)
   printf2(verbose = verbose, "\nFinished GWAS on phenotype %s. ",
           names(df)[i])
     } else {
@@ -229,12 +239,12 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
   thr_log10p <- big_apply(gwas2,
                          a.FUN = function(X, ind) rowSums(X[, ind]),
                          ind = ind_p,
-                         a.combine = 'plus')
+                         a.combine = 'plus', ncores = ncores)
   } else if(thr.m[1] == "max"){
     log10pmax_f <- function(X, ind) rowMaxs(as.matrix(X[, ind]))
     thr_log10p <- big_apply(gwas2,
                            a.FUN = log10pmax_f,
-                           ind = ind_p, a.combine = 'plus')
+                           ind = ind_p, a.combine = 'plus', ncores = ncores)
   }
   gwas2$add_columns(ncol_add = 1)
   colnames_fbm <- c(colnames_fbm, paste0(thr.m[1], "_thr_log10p"))
@@ -247,21 +257,24 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
   replace_na_0 <- function(X, ind) replace_na(X[, ind], 0)
   for (j in seq_along(ind_p)) {  # standardize one gwas at a time.
   gwas2[, ind_se[j]] <- big_apply(gwas2, a.FUN = replace_na_1, ind = ind_se[j],
-                              a.combine = 'plus')
+                                  a.combine = 'plus', ncores = ncores)
   gwas2[, ind_estim[j]] <- big_apply(gwas2, a.FUN = replace_na_0,
-                                     ind = ind_estim[j], a.combine = 'plus')
+                                     ind = ind_estim[j], a.combine = 'plus',
+                                     ncores = ncores)
   gwas2[, ind_p[j]] <- big_apply(gwas2, a.FUN = replace_na_0, ind = ind_p[j],
-                                 a.combine = 'plus')
+                                 a.combine = 'plus', ncores = ncores)
   }
   gwas2[, (sum(gwas_ok)*3+1)] <- big_apply(gwas2, a.FUN = replace_na_0,
-                                          ind = (sum(gwas_ok)*3 + 1),
-                                          a.combine = 'plus')
+                                           ind = (sum(gwas_ok)*3 + 1),
+                                           a.combine = 'plus', ncores = ncores)
   gwas2$save()
 
-  strong_clumps <- snp_clumping(G, infos.chr = markers$CHRN, thr.r2 = thr.r2,
-                                infos.pos = markers$POS, S = thr_log10p)
-  random_clumps <- snp_clumping(G, infos.chr = markers$CHRN, thr.r2 = thr.r2,
-                               infos.pos = markers$POS)
+  strong_clumps <- snp_clumping(snp$genotypes, infos.chr = markers$CHRN,
+                                thr.r2 = thr.r2, infos.pos = markers$POS,
+                                S = thr_log10p, ncores = ncores)
+  random_clumps <- snp_clumping(snp$genotypes, infos.chr = markers$CHRN,
+                                thr.r2 = thr.r2, infos.pos = markers$POS,
+                                ncores = ncores)
   # this should be a top_n (slice_min/slice_max/slice_sample) with numSNPs, not a quantile
   strong_sample <- add_column(markers, thr_log10p) %>%
     rownames_to_column(var = "value") %>%
@@ -285,12 +298,13 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
   if (scale.phe == TRUE) {
     colmaxes <- function(X, ind) colMaxs(abs(as.matrix(X[, ind])))
     scale.effects <- big_apply(gwas2, a.FUN = colmaxes,
-                               ind = ind_estim, a.combine = 'c')
+                               ind = ind_estim, a.combine = 'c',
+                               ncores = ncores)
     colstand <- function(X, ind, v) X[,ind] / v
     for (j in seq_along(scale.effects)) {  # standardize one gwas at a time.
       gwas2[,c(ind_estim[j], ind_se[j])] <-
         big_apply(gwas2, a.FUN = colstand, ind = c(ind_estim[j], ind_se[j]),
-                  v = scale.effects[j], a.combine = 'plus')
+                  v = scale.effects[j], a.combine = 'plus', ncores = ncores)
       }
     gwas2$save()
     gwas_metadata <- gwas_metadata %>% mutate(scaled = TRUE)
@@ -391,10 +405,12 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
       if (i == 1){
         m2 <- m_subset
       } else {     # make a new mash object with the combined data.
-        PosteriorMean = rbind(m2$result$PosteriorMean, m_subset$result$PosteriorMean)
+        PosteriorMean = rbind(m2$result$PosteriorMean,
+                              m_subset$result$PosteriorMean)
         PosteriorSD = rbind(m2$result$PosteriorSD, m_subset$result$PosteriorSD)
         lfdr = rbind(m2$result$lfdr, m_subset$result$lfdr)
-        NegativeProb = rbind(m2$result$NegativeProb, m_subset$result$NegativeProb)
+        NegativeProb = rbind(m2$result$NegativeProb,
+                             m_subset$result$NegativeProb)
         lfsr = rbind(m2$result$lfsr, m_subset$result$lfsr)
         posterior_matrices = list(PosteriorMean = PosteriorMean,
                                   PosteriorSD = PosteriorSD,
@@ -406,7 +422,8 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
         null_loglik = c(m2$null_loglik, m_subset$null_loglik)
         alt_loglik = rbind(m2$alt_loglik, m_subset$alt_loglik)
         fitted_g = m2$fitted_g        # all four components are equal
-        posterior_weights = rbind(m2$posterior_weights, m_subset$posterior_weights)
+        posterior_weights = rbind(m2$posterior_weights,
+                                  m_subset$posterior_weights)
         alpha = m2$alpha  # equal
         m2 = list(result = posterior_matrices,
                   loglik = loglik,
@@ -458,6 +475,7 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
 #' @param svd Optional covariance matrix to include in the regression. You
 #'     can generate these using \code{bigsnpr::snp_autoSVD()}.
 #' @param npcs Integer. Number of PCs to use for population structure correction.
+#' @param ncores Integer. Number of cores to use for parallelization.
 #'
 #' @import bigsnpr
 #' @import bigstatsr
@@ -471,7 +489,7 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
 #'     in the working directory.
 #'
 #' @export
-div_gwas <- function(df, snp, type, svd, npcs){
+div_gwas <- function(df, snp, type, svd, npcs, ncores){
   stopifnot(type %in% c("linear", "logistic"))
   if(attr(snp, "class") != "bigSNP"){
     stop("snp needs to be a bigSNP object, produced by the bigsnpr package.")
@@ -479,7 +497,6 @@ div_gwas <- function(df, snp, type, svd, npcs){
   if(colnames(df)[1] != "sample.ID"){
     stop("First column of phenotype dataframe (df) must be 'sample.ID'.")
   }
-  G <- snp$genotypes
   pc_max = ncol(svd$u)
 
   for(i in seq_along(names(df))[-1]){
@@ -489,11 +506,12 @@ div_gwas <- function(df, snp, type, svd, npcs){
     if(type == "linear"){
       if(npcs > 0){
         ind_u <- matrix(svd$u[which(!is.na(df[,i])),1:npcs], ncol = npcs)
-        gwaspc <- big_univLinReg(G, y.train = y1, covar.train = ind_u,
-                                 ind.train = ind_y, ncores = 1)
+        gwaspc <- big_univLinReg(snp$genotypes, y.train = y1,
+                                 covar.train = ind_u, ind.train = ind_y,
+                                 ncores = ncores)
       } else {
-        gwaspc <- big_univLinReg(G, y.train = y1, ind.train = ind_y,
-                                 ncores = 1)
+        gwaspc <- big_univLinReg(snp$genotypes, y.train = y1, ind.train = ind_y,
+                                 ncores = ncores)
       }
     } else if(type == "logistic"){
       message(paste0("For logistic models, if convergence is not reached by ",
@@ -502,14 +520,14 @@ div_gwas <- function(df, snp, type, svd, npcs){
                      "converge either, those SNP estimations are set to NA."))
       if(npcs > 0){
         ind_u <- matrix(svd$u[which(!is.na(df[,i])),1:npcs], ncol = npcs)
-        gwaspc <- suppressMessages(big_univLogReg(G, y01.train = y1,
+        gwaspc <- suppressMessages(big_univLogReg(snp$genotypes, y01.train = y1,
                                                   covar.train = ind_u,
                                                   ind.train = ind_y,
-                                                  ncores = 1))
+                                                  ncores = ncores))
       } else {
-        gwaspc <- suppressMessages(big_univLogReg(G, y01.train = y1,
+        gwaspc <- suppressMessages(big_univLogReg(snp$genotypes, y01.train = y1,
                                                   ind.train = ind_y,
-                                                  ncores = 1))
+                                                  ncores = ncores))
       }
     } else {
       stop(paste0("Type of GWAS not recognized: please choose one of 'linear'",
@@ -649,10 +667,10 @@ round_xy <- function(x, y, cl = NA, cu = NA, roundby = 0.001){
   }
 }
 
-get_manhattan <- function(X, ind, snp, thresh){
+get_manhattan <- function(X, ind, snp, thresh, ncores){
   roundFBM <- function(X, ind, at) ceiling(X[, ind] / at) * at
   observed <- big_apply(X, ind = ind, a.FUN = roundFBM, at = 0.01,
-                        a.combine = 'plus')
+                        a.combine = 'plus', ncores = ncores)
 
   plot_data <- tibble(CHR = snp$map$chromosome, POS = snp$map$physical.pos,
                     marker.ID = snp$map$marker.ID, observed = observed)
@@ -752,8 +770,6 @@ div_lambda_GC <- function(df, type = c("linear", "logistic"), snp,
                 " PC #'s to test (npcs)."))
   }
 
-  G <- snp$genotypes
-
   LambdaGC <- as_tibble(matrix(data =
                                  c(npcs, rep(NA, (ncol(df) - 1)*length(npcs))),
                                nrow = length(npcs), ncol = ncol(df),
@@ -773,14 +789,15 @@ div_lambda_GC <- function(df, type = c("linear", "logistic"), snp,
 
         if (npcs[k] == 0) {
 
-          gwaspc <- big_univLinReg(G, y.train = y1, ind.train = ind_y,
-                                   ncores = ncores)
+          gwaspc <- big_univLinReg(snp$genotypes, y.train = y1,
+                                   ind.train = ind_y, ncores = ncores)
         } else {
 
           ind_u <- matrix(svd$u[which(!is.na(df[,i])),1:npcs[k]],
                           ncol = npcs[k])
-          gwaspc <- big_univLinReg(G, y.train = y1, covar.train = ind_u,
-                                   ind.train = ind_y, ncores = ncores)
+          gwaspc <- big_univLinReg(snp$genotypes, y.train = y1,
+                                   covar.train = ind_u, ind.train = ind_y,
+                                   ncores = ncores)
         }
       } else if(type == "logistic"){
         message(paste0("For logistic models, if convergence is not reached by ",
@@ -790,13 +807,15 @@ div_lambda_GC <- function(df, type = c("linear", "logistic"), snp,
         y1 <- as_vector(df[which(!is.na(df[,i])), i])
         ind_y <- which(!is.na(df[,i]))
         if(npcs[k] == 0){
-          gwaspc <- suppressMessages(big_univLogReg(G, y01.train = y1,
+          gwaspc <- suppressMessages(big_univLogReg(snp$genotypes,
+                                                    y01.train = y1,
                                                     ind.train = ind_y,
                                                     ncores = ncores))
         } else {
           ind_u <- matrix(svd$u[which(!is.na(df[,i])),1:npcs[k]],
                           ncol = npcs[k])
-          gwaspc <- suppressMessages(big_univLogReg(G, y01.train = y1,
+          gwaspc <- suppressMessages(big_univLogReg(snp$genotypes,
+                                                    y01.train = y1,
                                                     covar.train = ind_u,
                                                     ind.train = ind_y,
                                                     ncores = ncores))
@@ -806,6 +825,8 @@ div_lambda_GC <- function(df, type = c("linear", "logistic"), snp,
       LambdaGC[k,i] <- get_lambdagc(ps = ps)
       #message(paste0("Finished Lambda_GC calculation for ", names(df)[i],
       #               " using ", npcs[k], " PCs."))
+      rm(ps)
+      rm(gwaspc)
     }
 
     if(saveoutput == TRUE){

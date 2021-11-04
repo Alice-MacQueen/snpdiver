@@ -10,6 +10,7 @@ dive_effects2mash(
   metadata,
   suffix = "",
   outputdir = ".",
+  ncores = NA,
   thr.r2 = 0.2,
   thr.m = c("max", "sum"),
   num.strong = 1000,
@@ -33,6 +34,9 @@ Saved under the name "gwas_effects_{suffix}_associated_metadata.csv".}
 \item{suffix}{Optional character vector to give saved files a unique search string/name.}
 
 \item{outputdir}{Optional file path to save output files.}
+
+\item{ncores}{Optional integer to specify the number of cores to be used
+for parallelization. You can specify this with bigparallelr::nb_cores().}
 
 \item{thr.r2}{Value between 0 and 1. Threshold of r2 measure of linkage
 disequilibrium. Markers in higher LD than this will be subset using clumping.}
