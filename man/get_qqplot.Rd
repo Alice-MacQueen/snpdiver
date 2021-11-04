@@ -4,10 +4,14 @@
 \alias{get_qqplot}
 \title{Create a quantile-quantile plot with ggplot2.}
 \usage{
-get_qqplot(ps, ci = 0.95, lambdaGC = FALSE, tol = 1e-08)
+get_qqplot(ps, X = NULL, ind = NULL, ci = 0.95, lambdaGC = FALSE, tol = 1e-08)
 }
 \arguments{
 \item{ps}{Numeric vector of p-values.}
+
+\item{X}{a gwas_effects FBM object}
+
+\item{ind}{The column number containing the -log10p-values in the FBM object.}
 
 \item{ci}{Numeric. Size of the confidence interval, 0.95 by default.}
 

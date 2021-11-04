@@ -540,6 +540,8 @@ printf2 <- function(verbose, ...) if (verbose) { printf(...) }
 #'     will result in similar test statistics.
 #'
 #' @param ps Numeric vector of p-values.
+#' @param X a gwas_effects FBM object
+#' @param ind The column number containing the -log10p-values in the FBM object.
 #' @param ci Numeric. Size of the confidence interval, 0.95 by default.
 #' @param lambdaGC Logical. Add the Genomic Control coefficient as subtitle to
 #'     the plot?
@@ -553,7 +555,12 @@ printf2 <- function(verbose, ...) if (verbose) { printf(...) }
 #' @return A ggplot2 plot.
 #'
 #' @export
-get_qqplot <- function(ps, ci = 0.95, lambdaGC = FALSE, tol = 1e-8) {
+get_qqplot <- function(ps, X = NULL, ind = NULL, ci = 0.95, lambdaGC = FALSE,
+                       tol = 1e-8) {
+  if(!is.null(X) & !is.null(ind)){
+    ps <- X[,ind]
+    ps <- 10^-ps
+  }
   ps <- ps[which(!is.na(ps))]
   n  <- length(ps)
   df <- data.frame(
@@ -660,7 +667,8 @@ get_manhattan <- function(X, ind, snp, thresh){
     mutate(CHR = as.factor(.data$CHR))
 
   nchr <- length(unique(plot_data$CHR))
-
+  log10P <- expression(paste("-log"[10], plain("("), italic(p-value),
+                              plain(")")))
   p1 <- plot_data %>%
     ggplot(aes(x = .data$POS, y = .data$observed)) +
     geom_point(aes(color = .data$CHR, fill = .data$CHR)) +
@@ -690,7 +698,7 @@ get_manhattan <- function(X, ind, snp, thresh){
           strip.background = element_blank(),
           strip.text = element_text(hjust = 0.5, size = 10 ,vjust = 0),
           strip.placement = 'outside', panel.spacing.x = unit(-0.1, 'cm')) +
-    labs(x = "Chromosome", y = "-log10(p value)") +
+    labs(x = "Chromosome", y = log10P) +
     scale_x_continuous(expand = c(0.15, 0.15))
   return(p1)
 }

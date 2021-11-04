@@ -910,12 +910,15 @@ mash_plot_manhattan_by_condition <- function(m, snp, cond = NA,
                                                              conditions = cond) )
 
   log10BF <- expression(paste("log"[10], plain("(Bayes Factor)")))
+  nchr <- length(unique(log10bf_df$CHR))
 
   ggmanobject <- ggplot(data = log10bf_df, aes(x = .data$POS,
                                              y = .data$log10BayesFactor)) +
-    geom_point(aes(color = .data$Num_Sig_Conditions, fill = .data$Num_Sig_Conditions,
+    geom_point(aes(color = .data$Num_Sig_Conditions,
+                   fill = .data$Num_Sig_Conditions,
                    shape = as.factor(.data$CHR))) +
-    facet_wrap(~ .data$CHR, nrow = 1, scales = "free_x", strip.position = "bottom") +
+    facet_wrap(~ .data$CHR, nrow = 1, scales = "free_x",
+               strip.position = "bottom") +
     scale_color_viridis_c(option = "B", end = 0.95) +
     scale_fill_viridis_c(option = "B", end = 0.95) +
     theme_classic() +
@@ -939,7 +942,7 @@ mash_plot_manhattan_by_condition <- function(m, snp, cond = NA,
           strip.placement = 'outside', panel.spacing.x = unit(-0.01, 'cm')) +
     labs(x = "Chromosome", y = log10BF) +
     scale_x_continuous(expand = c(0.12, 0.12)) +
-    scale_shape_manual(values = rep(c(21, 22, 23), 9), guide = FALSE)
+    scale_shape_manual(values = rep(c(21, 22, 23), ceiling(nchr/3)), guide = FALSE)
 
   if(saveoutput == TRUE){
     if(!(str_sub(suffix, end = 1) %in% c("", "_"))){
