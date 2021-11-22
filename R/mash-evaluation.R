@@ -526,12 +526,12 @@ get_U_by_mass <- function(m, thresh = 0.05){
 #'
 #' @param cormat A correlation matrix
 #'
-#' @importFrom cluster daisy
 #' @importFrom stats hclust
 #'
 reorder_cormat <- function(cormat){
+  requireNamespace("cluster")
   # Use correlation between variables as distance
-  dd <- daisy(cormat, metric = "gower")
+  dd <- cluster::daisy(cormat, metric = "gower")
   hc <- hclust(dd)
   cormat <- cormat[hc$order, hc$order]
 }

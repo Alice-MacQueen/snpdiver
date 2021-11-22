@@ -19,12 +19,10 @@ Imports:
     bigparallelr,
     bigsnpr,
     bigstatsr,
-    cluster,
     cowplot,
     dplyr,
     GGally,
     ggplot2,
-    here,
     hexbin,
     mashr,
     magrittr,
@@ -38,5 +36,7 @@ Imports:
     tidyr,
     tidyselect
 Suggests: 
+    cluster,
     dots,
+    here,
     roxygen2
