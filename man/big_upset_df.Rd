@@ -5,7 +5,7 @@
 \title{Plot the -log10p-value distributions for two univariate GWAS against
 one another using ggplot.}
 \usage{
-big_upset_df(effects, thr = 7, quantile = NA, metadata)
+big_upset_df(effects, thr = 7, quantile = NA, metadata, ncores = nb_cores)
 }
 \arguments{
 \item{effects}{fbm created using 'dive_phe2effects' or 'dive_phe2mash'.
@@ -19,6 +19,9 @@ comparisons.}
 
 \item{metadata}{Metadata created using 'dive_phe2effects' or 'dive_phe2mash'.
 Saved under the name "gwas_effects_{suffix}_associated_metadata.csv".}
+
+\item{ncores}{Optional integer to specify the number of cores to be used
+for parallelization. You can specify this with bigparallelr::nb_cores().}
 }
 \description{
 This function takes GWAS results from the dive_ functions of

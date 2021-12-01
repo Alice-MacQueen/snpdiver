@@ -8,6 +8,7 @@ dive_effects2mash(
   effects,
   snp,
   metadata,
+  phe = c(1:nrow(metadata)),
   suffix = "",
   outputdir = ".",
   ncores = NA,
@@ -31,7 +32,13 @@ R using the bigstatsr function "big_attach".}
 \item{metadata}{Metadata created using 'dive_phe2effects' or 'dive_phe2mash'.
 Saved under the name "gwas_effects_{suffix}_associated_metadata.csv".}
 
-\item{suffix}{Optional character vector to give saved files a unique search string/name.}
+\item{phe}{Optional numeric vector of phenotypes to include in the mash
+run. Default is to include all phenotypes specified in effects and
+metadata. Specify this by specifying the row numbers of metadata that
+you would like to keep.}
+
+\item{suffix}{Optional character vector to give saved files a unique search
+string/name.}
 
 \item{outputdir}{Optional file path to save output files.}
 
@@ -39,29 +46,32 @@ Saved under the name "gwas_effects_{suffix}_associated_metadata.csv".}
 for parallelization. You can specify this with bigparallelr::nb_cores().}
 
 \item{thr.r2}{Value between 0 and 1. Threshold of r2 measure of linkage
-disequilibrium. Markers in higher LD than this will be subset using clumping.}
+disequilibrium. Markers in higher LD than this will be subset using
+clumping.}
 
 \item{thr.m}{"sum" or "max". Type of threshold to use to clump values for
 mash inputs. "sum" sums the -log10pvalues for each phenotype and uses
 the maximum of this value as the threshold. "max" uses the maximum
 -log10pvalue for each SNP across all of the univariate GWAS.}
 
-\item{num.strong}{Integer. Number of SNPs used to derive data-driven covariance
-matrix patterns, using markers with strong effects on phenotypes.}
+\item{num.strong}{Integer. Number of SNPs used to derive data-driven
+covariance matrix patterns, using markers with strong effects on
+phenotypes.}
 
-\item{num.random}{Integer. Number of SNPs used to derive the correlation structure
-of the null tests, and the mash fit on the null tests.}
+\item{num.random}{Integer. Number of SNPs used to derive the correlation
+structure of the null tests, and the mash fit on the null tests.}
 
 \item{scale.phe}{Logical. Should effects for each phenotype be scaled to fall
 between -1 and 1? Default is TRUE.}
 
-\item{U.ed}{Mash data-driven covariance matrices. Specify these as a list or a path
-to a file saved as an .rds. Creating these can be time-consuming, and
-generating these once and reusing them for multiple mash runs can save time.}
+\item{U.ed}{Mash data-driven covariance matrices. Specify these as a list
+or a path to a file saved as an .rds. Creating these can be
+time-consuming, and generating these once and reusing them for multiple
+mash runs can save time.}
 
-\item{U.hyp}{Other covariance matrices for mash. Specify these as a list. These
-matrices must have dimensions that match the number of phenotypes where
-univariate GWAS ran successfully.}
+\item{U.hyp}{Other covariance matrices for mash. Specify these as a list.
+These matrices must have dimensions that match the number of phenotypes
+where univariate GWAS ran successfully.}
 
 \item{verbose}{Output some information on the iterations? Default is \code{TRUE}.}
 }

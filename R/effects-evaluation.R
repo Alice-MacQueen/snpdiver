@@ -31,19 +31,24 @@ thresholdFBM <- function(X, ind, thr, quantile = NA) {
 #'     comparisons.
 #' @param metadata Metadata created using 'dive_phe2effects' or 'dive_phe2mash'.
 #'     Saved under the name "gwas_effects_{suffix}_associated_metadata.csv".
+#' @param ncores Optional integer to specify the number of cores to be used
+#'     for parallelization. You can specify this with bigparallelr::nb_cores().
 #'
-#' @importFrom matrixStats rowMaxs
-#'
-big_upset_df <- function(effects, thr = 7, quantile = NA, metadata){
+#' @export
+big_upset_df <- function(effects, thr = 7, quantile = NA, metadata,
+                         ncores = nb_cores){
   gwas_ok <- floor(effects$ncol / 3)
   ind_p <- (1:(gwas_ok))*3
   colnames_fbm <- metadata$phe
   if(effects$ncol < (sum(gwas_ok)*3 + 1))  {
     effects$add_columns(ncol_add = 1)
   }  # add a column for the threshold score if there isn't one already
-  thr_df <- big_apply(effects,
-                      a.FUN = function(X, ind) rowMaxs(as.matrix(effects[, ind])),
-                      ind = ind_p, a.combine = 'c', block.size = 100)
+  eff_sub <- big_copy(effects, ind.col = ind_p)
+  thr_df <- big_apply(eff_sub,
+                          a.FUN = function(X, ind) max(X[ind, ]),
+                          ind = rows_along(eff_sub),
+                          a.combine = 'c', block.size = 100,
+                          ncores = ncores)
   effects[,(sum(gwas_ok)*3 + 1)] <- thr_df
   thr_df <- which(thr_df > thr)
   thr_df <- big_copy(effects, ind.row = thr_df, ind.col = ind_p)

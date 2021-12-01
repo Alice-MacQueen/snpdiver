@@ -42,7 +42,6 @@
 #' @import mashr
 #' @importFrom cowplot save_plot
 #' @importFrom tidyr replace_na
-#' @importFrom matrixStats colMaxs rowMaxs
 #' @importFrom stats predict
 #' @importFrom bigassertr printf
 #' @importFrom bigparallelr nb_cores

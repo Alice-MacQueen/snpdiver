@@ -14,28 +14,36 @@
 #' @param snp A "bigSNP" object; load with \code{snp_attach()}.
 #' @param metadata Metadata created using 'dive_phe2effects' or 'dive_phe2mash'.
 #'     Saved under the name "gwas_effects_{suffix}_associated_metadata.csv".
-#' @param suffix Optional character vector to give saved files a unique search string/name.
+#' @param phe Optional numeric vector of phenotypes to include in the mash
+#'     run. Default is to include all phenotypes specified in effects and
+#'     metadata. Specify this by specifying the row numbers of metadata that
+#'     you would like to keep.
+#' @param suffix Optional character vector to give saved files a unique search
+#'     string/name.
 #' @param outputdir Optional file path to save output files.
 #' @param ncores Optional integer to specify the number of cores to be used
 #'     for parallelization. You can specify this with bigparallelr::nb_cores().
 #' @param thr.r2 Value between 0 and 1. Threshold of r2 measure of linkage
-#'     disequilibrium. Markers in higher LD than this will be subset using clumping.
+#'     disequilibrium. Markers in higher LD than this will be subset using
+#'     clumping.
 #' @param thr.m "sum" or "max". Type of threshold to use to clump values for
 #'     mash inputs. "sum" sums the -log10pvalues for each phenotype and uses
 #'     the maximum of this value as the threshold. "max" uses the maximum
 #'     -log10pvalue for each SNP across all of the univariate GWAS.
-#' @param num.strong Integer. Number of SNPs used to derive data-driven covariance
-#'     matrix patterns, using markers with strong effects on phenotypes.
-#' @param num.random Integer. Number of SNPs used to derive the correlation structure
-#'     of the null tests, and the mash fit on the null tests.
+#' @param num.strong Integer. Number of SNPs used to derive data-driven
+#'     covariance matrix patterns, using markers with strong effects on
+#'     phenotypes.
+#' @param num.random Integer. Number of SNPs used to derive the correlation
+#'     structure of the null tests, and the mash fit on the null tests.
 #' @param scale.phe Logical. Should effects for each phenotype be scaled to fall
 #'     between -1 and 1? Default is TRUE.
-#' @param U.ed Mash data-driven covariance matrices. Specify these as a list or a path
-#'     to a file saved as an .rds. Creating these can be time-consuming, and
-#'     generating these once and reusing them for multiple mash runs can save time.
-#' @param U.hyp Other covariance matrices for mash. Specify these as a list. These
-#'     matrices must have dimensions that match the number of phenotypes where
-#'     univariate GWAS ran successfully.
+#' @param U.ed Mash data-driven covariance matrices. Specify these as a list
+#'     or a path to a file saved as an .rds. Creating these can be
+#'     time-consuming, and generating these once and reusing them for multiple
+#'     mash runs can save time.
+#' @param U.hyp Other covariance matrices for mash. Specify these as a list.
+#'     These matrices must have dimensions that match the number of phenotypes
+#'     where univariate GWAS ran successfully.
 #' @param verbose Output some information on the iterations? Default is `TRUE`.
 #'
 #' @return A mash object made up of all phenotypes where univariate GWAS ran
@@ -49,14 +57,13 @@
 #' @import mashr
 #' @importFrom cowplot save_plot
 #' @importFrom tidyr replace_na
-#' @importFrom matrixStats colMaxs rowMaxs
 #' @importFrom stats predict
 #' @importFrom bigassertr printf
 #' @importFrom bigparallelr nb_cores
 #'
 #' @export
-dive_effects2mash <- function(effects, snp, metadata, suffix = "",
-                              outputdir = ".", ncores = NA,
+dive_effects2mash <- function(effects, snp, metadata, phe = c(1:nrow(metadata)),
+                              suffix = "", outputdir = ".", ncores = NA,
                               thr.r2 = 0.2, thr.m = c("max", "sum"),
                               num.strong = 1000, num.random = NA,
                               scale.phe = TRUE, U.ed = NA,
@@ -66,13 +73,26 @@ dive_effects2mash <- function(effects, snp, metadata, suffix = "",
     stop("snp needs to be a bigSNP object, produced by the bigsnpr package.")
   }
   if (!dir.exists(outputdir)) {
-    dir.create(outputdir)
+    stop("outputdir needs to specify an existing file path.")
   }
-  if (!grepl("_$", suffix) & suffix != ""){
+  if (!grepl("_$", suffix) & suffix != "") {
     suffix <- paste0("_", suffix)
+  }
+  if (suffix == "") {
+    suffix <- paste0("_", get_date_filename())
   }
   if(is.na(ncores)){
     ncores <- nb_cores()
+  }
+  gwas_ok <- floor(effects$ncol / 3)
+  if (gwas_ok != nrow(metadata)) {
+    stop(paste0("metadata needs to be the dataframe saved with the FBM object",
+                "produced by dive_phe2effects() or dive_phe2mash(). This is ",
+                "saved as a csv ending in associated_metadata.csv."))
+  }
+  if (!is.numeric(phe)) {
+    stop(paste0("phe must be a numeric vector of the rows of metadata to keep",
+                "for the mash run."))
   }
 
   ## 1a. Generate useful values ----
@@ -90,64 +110,77 @@ dive_effects2mash <- function(effects, snp, metadata, suffix = "",
                     marker.ID = snp$map$marker.ID) %>%
     mutate(CHRN = as.numeric(as.factor(.data$CHR)),
            CHR = as.factor(.data$CHR))
-  gwas_ok <- floor(effects$ncol / 3)
 
   printf2(verbose = verbose, "\nNow preparing gwas effects for use in mash.\n")
   # 4. mash input ----
   ## prioritize effects with max(log10p) or max(sum(log10p))
   ## make a random set of relatively unlinked SNPs
-  ind_estim <- (1:(gwas_ok))*3 - 2
-  ind_se <- (1:(gwas_ok))*3 - 1
-  ind_p <- (1:(gwas_ok))*3
+  ind_estim <- ((1:(gwas_ok))*3 - 2)[phe]
+  ind_se <- ((1:(gwas_ok))*3 - 1)[phe]
+  ind_p <- ((1:(gwas_ok))*3)[phe]
   colnames_fbm <- metadata$phe
 
   if(effects$ncol %% 3 == 0){
     if (thr.m[1] == "sum") {
-      thr_log10p <- big_apply(effects,
-                              a.FUN = function(X, ind) rowSums(X[, ind]),
-                              ind = ind_p,
-                              a.combine = 'plus', ncores = ncores)
+      eff_sub <- big_copy(effects, ind.col = ind_p)
+      thr_log10p <- big_apply(eff_sub,
+                              a.FUN = function(X, ind) sum(X[ind,]),
+                              ind = rows_along(eff_sub),
+                              a.combine = 'c', ncores = ncores)
     } else if(thr.m[1] == "max"){
-      log10pmax_f <- function(X, ind) rowMaxs(as.matrix(X[, ind]))
-      thr_log10p <- big_apply(effects,
-                              a.FUN = log10pmax_f,
-                              ind = ind_p, a.combine = 'c', ncores = ncores)
+      rowmax <- function(X, ind) {
+        max <- apply(X[,-1], 1, max)
+      }
+      eff_sub <- big_copy(effects, ind.col = ind_p)
+      thr_log10p <- big_apply(eff_sub,
+                              a.FUN = function(X, ind) max(X[ind, ]),
+                              ind = rows_along(eff_sub),
+                              a.combine = 'c', block.size = 1,
+                              ncores = ncores)
+      rm(eff_sub)
     }
     effects$add_columns(ncol_add = 1)
     colnames_fbm <- c(colnames_fbm, paste0(thr.m[1], "_thr_log10p"))
     effects[,(sum(gwas_ok)*3 + 1)] <- thr_log10p
     effects$save()
-  } else if (effects$ncol %% 3 == 1){
+  } else if (effects$ncol %% 3 == 1) {
     if (thr.m[1] == "sum") {
-      thr_log10p <- big_apply(effects,
-                              a.FUN = function(X, ind) rowSums(X[, ind]),
-                              ind = ind_p,
-                              a.combine = 'plus', ncores = ncores)
-    } else if(thr.m[1] == "max"){
-      log10pmax_f <- function(X, ind) rowMaxs(as.matrix(X[, ind]))
-      thr_log10p <- big_apply(effects,
-                              a.FUN = log10pmax_f,
-                              ind = ind_p, a.combine = 'c', ncores = ncores)
+      eff_sub <- big_copy(effects, ind.col = ind_p)
+      thr_log10p <- big_apply(eff_sub,
+                              a.FUN = function(X, ind) sum(X[ind,]),
+                              ind = rows_along(eff_sub),
+                              a.combine = 'c', ncores = ncores)
+    } else if(thr.m[1] == "max") {
+      eff_sub <- big_copy(effects, ind.col = ind_p)
+      thr_log10p <- big_apply(eff_sub,
+                              a.FUN = function(X, ind) max(X[ind, ]),
+                              ind = rows_along(eff_sub),
+                              a.combine = 'c', block.size = 1,
+                              ncores = ncores)
+      rm(eff_sub)
     }
     colnames_fbm <- c(colnames_fbm, paste0(thr.m[1], "_thr_log10p"))
     effects[,(sum(gwas_ok)*3 + 1)] <- thr_log10p
     effects$save()
   } else {
-    stop("Effect df should have a multiple of three columns, or can have one additional
-         column for the p value threshold.")
+    stop(paste0("Effect df should have a multiple of three columns, or can ",
+                "have one additional column for the p value threshold."))
   }
 
   ## replace NA or Nan values
   # Replace SE with 1's, estimates and p values with 0's.
-  replace_na_1 <- function(X, ind) replace_na(X[, ind], 1)
-  replace_na_0 <- function(X, ind) replace_na(X[, ind], 0)
-  effects[, ind_se] <- big_apply(effects, a.FUN = replace_na_1, ind = ind_se,
-                               a.combine = 'plus', ncores = ncores)
-  effects[, ind_estim] <- big_apply(effects, a.FUN = replace_na_0,
-                                    ind = ind_estim, ncores = ncores,
-                                    a.combine = 'plus')
-  effects[, ind_p] <- big_apply(effects, a.FUN = replace_na_0, ind = ind_p,
-                                a.combine = 'plus', ncores = ncores)
+  replace_na_1 <- function(X, ind) tidyr::replace_na(X[, ind], 1)
+  replace_na_0 <- function(X, ind) tidyr::replace_na(X[, ind], 0)
+  for (j in seq_along(ind_p)) {  # standardize one gwas at a time.
+    effects[, ind_se[j]] <- big_apply(effects, a.FUN = replace_na_1, ind = ind_se[j],
+                                    a.combine = 'plus', ncores = ncores)
+    effects[, ind_estim[j]] <- big_apply(effects, a.FUN = replace_na_0,
+                                       ind = ind_estim[j], a.combine = 'plus',
+                                       ncores = ncores)
+    effects[, ind_p[j]] <- big_apply(effects, a.FUN = replace_na_0, ind = ind_p[j],
+                                   a.combine = 'plus', ncores = ncores)
+  }
+
   effects[, (sum(gwas_ok)*3+1)] <- big_apply(effects, a.FUN = replace_na_0,
                                              ind = (sum(gwas_ok)*3 + 1),
                                              a.combine = 'plus',
@@ -155,10 +188,12 @@ dive_effects2mash <- function(effects, snp, metadata, suffix = "",
   effects$save()
 
   strong_clumps <- snp_clumping(G, infos.chr = markers$CHRN, thr.r2 = thr.r2,
-                                infos.pos = markers$POS, S = thr_log10p)
+                                infos.pos = markers$POS, S = thr_log10p,
+                                ncores = ncores)
   random_clumps <- snp_clumping(G, infos.chr = markers$CHRN, thr.r2 = thr.r2,
-                                infos.pos = markers$POS)
-  # this should be a top_n (slice_min/slice_max/slice_sample) with numSNPs, not a quantile
+                                infos.pos = markers$POS, ncores = ncores)
+  # this should be a top_n (slice_min/slice_max/slice_sample) with numSNPs,
+  # not a quantile
   strong_sample <- add_column(markers, thr_log10p) %>%
     rownames_to_column(var = "value") %>%
     mutate(value = as.numeric(.data$value)) %>%
@@ -179,15 +214,16 @@ dive_effects2mash <- function(effects, snp, metadata, suffix = "",
 
   ## scaling
   if (scale.phe == TRUE) {
-    colmaxes <- function(X, ind) colMaxs(abs(as.matrix(X[, ind])))
-    scale.effects <- big_apply(effects, a.FUN = colmaxes,
-                               ind = ind_estim, a.combine = 'c',
+    eff_sub <- big_copy(effects, ind.col = ind_estim)
+    scale.effects <- big_apply(eff_sub,
+                               a.FUN = function(X, ind) max(abs(X[, ind])),
+                               ind = cols_along(eff_sub), a.combine = 'c',
                                ncores = ncores)
     colstand <- function(X, ind, v) X[,ind] / v
     for (j in seq_along(scale.effects)) {  # standardize one gwas at a time.
       effects[,c(ind_estim[j], ind_se[j])] <-
         big_apply(effects, a.FUN = colstand, ind = c(ind_estim[j], ind_se[j]),
-                  v = scale.effects[j], a.combine = 'plus', ncores = ncores)
+                  v = scale.effects[j], a.combine = 'cbind', ncores = ncores)
     }
     effects$save()
     gwas_metadata <- metadata %>% mutate(scaled = TRUE)
@@ -210,10 +246,10 @@ dive_effects2mash <- function(effects, snp, metadata, suffix = "",
   Shat_random <- as.matrix(effects[random_sample$value, ind_se])
 
   ## name the columns for these conditions (usually the phenotype)
-  colnames(Bhat_strong) <- gwas_metadata$phe
-  colnames(Shat_strong) <- gwas_metadata$phe
-  colnames(Bhat_random) <- gwas_metadata$phe
-  colnames(Shat_random) <- gwas_metadata$phe
+  colnames(Bhat_strong) <- gwas_metadata$phe[phe]
+  colnames(Shat_strong) <- gwas_metadata$phe[phe]
+  colnames(Bhat_random) <- gwas_metadata$phe[phe]
+  colnames(Shat_random) <- gwas_metadata$phe[phe]
 
   # 5. mash ----
 
@@ -280,8 +316,8 @@ dive_effects2mash <- function(effects, snp, metadata, suffix = "",
       }
       Bhat_subset <- as.matrix(effects[row_subset, ind_estim])
       Shat_subset <- as.matrix(effects[row_subset, ind_se])
-      colnames(Bhat_subset) <- gwas_metadata$phe
-      colnames(Shat_subset) <- gwas_metadata$phe
+      colnames(Bhat_subset) <- gwas_metadata$phe[phe]
+      colnames(Shat_subset) <- gwas_metadata$phe[phe]
       data_subset <- mashr::mash_set_data(Bhat_subset, Shat_subset, V = Vhat)
       m_subset = mashr::mash(data_subset, g = ashr::get_fitted_g(m), fixg = TRUE)
 
@@ -322,8 +358,8 @@ dive_effects2mash <- function(effects, snp, metadata, suffix = "",
   } else {
     Bhat_full <- as.matrix(effects[, ind_estim])
     Shat_full <- as.matrix(effects[, ind_se])
-    colnames(Bhat_full) <- gwas_metadata$phe
-    colnames(Shat_full) <- gwas_metadata$phe
+    colnames(Bhat_full) <- gwas_metadata$phe[phe]
+    colnames(Shat_full) <- gwas_metadata$phe[phe]
     data_full <- mashr::mash_set_data(Bhat_full, Shat_full, V = Vhat)
     m2 = mashr::mash(data_full, g = ashr::get_fitted_g(m), fixg = TRUE)
   }

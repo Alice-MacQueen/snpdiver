@@ -57,7 +57,6 @@
 #' @import mashr
 #' @importFrom cowplot save_plot
 #' @importFrom tidyr replace_na
-#' @importFrom matrixStats colMaxs rowMaxs
 #' @importFrom stats predict
 #' @importFrom bigassertr printf
 #' @importFrom bigparallelr nb_cores
@@ -236,15 +235,18 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
   ind_p <- (1:sum(gwas_ok))*3
 
   if (thr.m[1] == "sum") {
-  thr_log10p <- big_apply(gwas2,
-                         a.FUN = function(X, ind) rowSums(X[, ind]),
-                         ind = ind_p,
-                         a.combine = 'plus', ncores = ncores)
+    eff_sub <- big_copy(effects, ind.col = ind_p)
+    thr_log10p <- big_apply(eff_sub,
+                            a.FUN = function(X, ind) sum(X[ind,]),
+                            ind = rows_along(eff_sub),
+                            a.combine = 'c', ncores = ncores)
   } else if(thr.m[1] == "max"){
-    log10pmax_f <- function(X, ind) rowMaxs(as.matrix(X[, ind]))
-    thr_log10p <- big_apply(gwas2,
-                           a.FUN = log10pmax_f,
-                           ind = ind_p, a.combine = 'plus', ncores = ncores)
+    eff_sub <- big_copy(effects, ind.col = ind_p)
+    thr_log10p <- big_apply(eff_sub,
+                            a.FUN = function(X, ind) max(X[ind, ]),
+                            ind = rows_along(eff_sub),
+                            a.combine = 'c', block.size = 100,
+                            ncores = ncores)
   }
   gwas2$add_columns(ncol_add = 1)
   colnames_fbm <- c(colnames_fbm, paste0(thr.m[1], "_thr_log10p"))
@@ -296,17 +298,18 @@ dive_phe2mash <- function(df, snp, type = "linear", svd = NULL, suffix = "",
 
     ## scaling
   if (scale.phe == TRUE) {
-    colmaxes <- function(X, ind) colMaxs(abs(as.matrix(X[, ind])))
-    scale.effects <- big_apply(gwas2, a.FUN = colmaxes,
-                               ind = ind_estim, a.combine = 'c',
+    eff_sub <- big_copy(effects, ind.col = ind_estim)
+    scale.effects <- big_apply(eff_sub,
+                               a.FUN = function(X, ind) max(abs(X[, ind])),
+                               ind = cols_along(eff_sub), a.combine = 'c',
                                ncores = ncores)
     colstand <- function(X, ind, v) X[,ind] / v
     for (j in seq_along(scale.effects)) {  # standardize one gwas at a time.
-      gwas2[,c(ind_estim[j], ind_se[j])] <-
-        big_apply(gwas2, a.FUN = colstand, ind = c(ind_estim[j], ind_se[j]),
-                  v = scale.effects[j], a.combine = 'plus', ncores = ncores)
-      }
-    gwas2$save()
+      effects[,c(ind_estim[j], ind_se[j])] <-
+        big_apply(effects, a.FUN = colstand, ind = c(ind_estim[j], ind_se[j]),
+                  v = scale.effects[j], a.combine = 'cbind', ncores = ncores)
+    }
+    effects$save()
     gwas_metadata <- gwas_metadata %>% mutate(scaled = TRUE)
   } else {
     gwas_metadata <- gwas_metadata %>% mutate(scaled = FALSE)
